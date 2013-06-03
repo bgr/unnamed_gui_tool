@@ -1,0 +1,4 @@
+This is a Jython project, so use jython when performing the bootstrap step:
+
+    jython bootstrap.py
+    bin/buildout
