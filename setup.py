@@ -5,7 +5,7 @@ from setuptools import setup, find_packages
 #     return open(os.path.join(os.path.dirname(__file__), fname)).read()
 
 setup(
-    name = "jython_test_project",
+    name = "my_project",
     version = "0.0.1",
     description = ("My Jython Test Project"),
     author = "bgr",

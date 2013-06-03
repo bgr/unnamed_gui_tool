@@ -1,0 +1,7 @@
+.installed.cfg
+bin/
+develop-eggs/
+eggs/
+*.egg-info/
+
+*$py.class
