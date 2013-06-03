@@ -3,5 +3,6 @@ bin/
 develop-eggs/
 eggs/
 *.egg-info/
+.ropeproject/
 
 *$py.class
