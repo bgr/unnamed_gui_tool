@@ -6,3 +6,4 @@ eggs/
 .ropeproject/
 
 *$py.class
+*.swp
