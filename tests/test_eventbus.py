@@ -6,7 +6,7 @@ class Dummy(object):
     def __init__(self):
         self.x = 1
 
-    def increment(self):
+    def increment(self, _):
         self.x += 1
 
 
@@ -21,14 +21,14 @@ class Test_single_listener(object):
         assert self.obj.x == 1  # unchanged
 
     def test_can_fire(self):
-        self.eb.notify_all('hey')
+        self.eb.dispatch('hey')
         assert self.obj.x == 2
-        self.eb.notify_all('hey')
+        self.eb.dispatch('hey')
         assert self.obj.x == 3
 
     def test_can_unregister(self):
         self.eb.unregister('hey', self.obj.increment)
-        self.eb.notify_all('hey')
+        self.eb.dispatch('hey')
         assert self.obj.x == 3  # unchanged
 
 
@@ -46,34 +46,34 @@ class Test_multiple_listeners(object):
         assert self.you.x == 1
 
     def test_firing_impacts_only_interested_listener(self):
-        self.eb.notify_all('hey')
+        self.eb.dispatch('hey')
         assert self.deaf.x == 1  # unchanged
         assert self.hey.x == 2
         assert self.you.x == 1  # unchanged
-        self.eb.notify_all('hey')
+        self.eb.dispatch('hey')
         assert self.deaf.x == 1  # unchanged
         assert self.hey.x == 3
         assert self.you.x == 1  # unchanged
-        self.eb.notify_all('you')
+        self.eb.dispatch('you')
         assert self.deaf.x == 1  # unchanged
         assert self.hey.x == 3
         assert self.you.x == 2  # unchanged
 
     def test_others_work_after_one_is_unregistered(self):
         self.eb.unregister('hey', self.hey.increment)
-        self.eb.notify_all('hey')
+        self.eb.dispatch('hey')
         assert self.deaf.x == 1  # unchanged
         assert self.hey.x == 3  # unchanged
         assert self.you.x == 2  # unchanged
-        self.eb.notify_all('you')
+        self.eb.dispatch('you')
         assert self.deaf.x == 1  # unchanged
         assert self.hey.x == 3  # unchanged
         assert self.you.x == 3  # unchanged
 
     def test_can_unregister_last_listener(self):
         self.eb.unregister('you', self.you.increment)
-        self.eb.notify_all('hey')
-        self.eb.notify_all('you')
+        self.eb.dispatch('hey')
+        self.eb.dispatch('you')
         assert self.deaf.x == 1  # unchanged
         assert self.hey.x == 3  # unchanged
         assert self.you.x == 3  # unchanged

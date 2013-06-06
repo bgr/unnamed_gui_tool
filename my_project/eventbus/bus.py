@@ -22,5 +22,5 @@ class EventBus(object):
         if len(group) == 0:
             del self.listeners[event_type]
 
-    def notify_all(self, event):
-        [cb() for cb in self.listeners.get(event, [])]
+    def dispatch(self, event, aux=None):
+        [cb(aux) for cb in self.listeners.get(event, [])]
