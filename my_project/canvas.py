@@ -1,85 +1,82 @@
-from javax.swing import JPanel, JFrame, JButton, BoxLayout
+from javax.swing import JPanel
 from java.awt import Color
-
-from util import invokeLater
-
-from model import (PaintingModel, Rectangle, Circle, Add_element,
-                   Element_Added)
-from eventbus import EventBus
+from model import Rectangle, Circle, Add_element, Element_added
 
 
-class Canvas(JPanel):
+class CanvasView(JPanel):
 
     def __init__(self, width, height):
-        super(Canvas, self).__init__()
+        super(CanvasView, self).__init__()
         self.size = (width, height)
         self.preferredSize = (width, height)
-        self.elems = []
+        self._elems = []
 
-    def set_elems(self, elems):
-        self.elems = elems
+        self.draw_handlers = {
+            Circle: self.draw_circle,
+            Rectangle: self.draw_rectangle,
+        }
+
+        self.tool_handlers = {
+            Circle: self.add_circle,
+            Rectangle: self.add_rectangle,
+        }
+
+        self.tool = Circle
+
+    @property
+    def elems(self):
+        return self._elems
+
+    @elems.setter
+    def elems(self, new_elems):
+        self._elems = new_elems
         self.repaint()
 
+    def add(self, elem):
+        self._elems.append(elem)
+        self.repaint()
+
+    def set_circle_tool(self):
+        print 'Set circle tool'
+        self.tool = 'circle'
+
+    def set_rect_tool(self):
+        print 'Set rect tool'
+        self.tool = 'rect'
+
     def paintComponent(self, g):
-        g.setColor(Color(120, 50, 10))
+        g.setColor(Color(255, 255, 255))
         g.fillRect(0, 0, self.preferredSize.width, self.preferredSize.height)
+
+        g.setColor(Color(25, 25, 25))
+        for el in self.elems:
+            self.draw_handlers[el.__class__](g, el)
+
+    def draw_circle(self, g, el):
+        g.drawOval(el.x, el.y, el.radius, el.radius)
+
+    def draw_rectangle(self, g, el):
+        g.drawRect(el.x, el.y, el.width, el.height)
 
 
 class CanvasController():
     def __init__(self, canvas, model, eventbus):
-        self.canvas = canvas
+        self.view = canvas
         self.model = model
         self.eb = eventbus
+        canvas.elems = model.elems
         canvas.mousePressed = self.add_new
-        eventbus.register(Element_Added, self.on_added)
+        eventbus.register(Element_added, self.on_added)
 
     def on_added(self, elem):
-        print 'Controller saw added {0}'.format(elem)
+        self.view.add(elem)
 
-    def add_new(self, e):
-        self.eb.dispatch(Add_element, Circle(e.x, e.y, 20))
+    def add_new(self, elem):
+        "Re-dispatches to eventbus when view dispatches newly added element"
+        self.eb.dispatch(Add_element, elem)
 
+    def set_circle_tool(self, _):
+        self.view.set_circle_tool()
 
-class App(JFrame):
-    def __init__(self):
-        super(App, self).__init__()
-        self.setup_gui()
-        self.wire_up()
-
-    def setup_gui(self):
-        self.title = "Colors"
-        self.layout = BoxLayout(self.contentPane, BoxLayout.PAGE_AXIS)
-        self.defaultCloseOperation = JFrame.EXIT_ON_CLOSE
-        self.size = (500, 400)
-        self.locationRelativeTo = None
-        self.visible = True
-
-        def pack_frame(e):
-            self.pack()
-
-        self.button = JButton('Pack', actionPerformed=pack_frame)
-        self.c_1 = Canvas(200, 100)
-        self.c_2 = Canvas(300, 200)
-        self.add(self.c_1)
-        self.add(self.c_2)
-        self.add(self.button)
-
-    def wire_up(self):
-        eb = EventBus()
-        model = PaintingModel(eb)
-        model.elems = [Circle(20, 30, 40), Rectangle(30, 40, 10, 20)]
-
-        CanvasController(self.c_1, model, eb)
-        CanvasController(self.c_2, model, eb)
-
-        eb.register(Add_element, model.add)
-
-
-
-@invokeLater
-def run_app():
-    App()
-
-if __name__ == '__main__':
-    #invokeLater(lambda: App())()
-    run_app()
+    def set_rect_tool(self, _):
+        self.view.set_rect_tool()

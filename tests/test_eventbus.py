@@ -6,7 +6,7 @@ class Dummy(object):
     def __init__(self):
         self.x = 1
 
-    def increment(self, _):
+    def increment(self, *_):
         self.x += 1
 
 

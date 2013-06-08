@@ -23,4 +23,5 @@ class EventBus(object):
             del self.listeners[event_type]
 
     def dispatch(self, event, aux=None):
-        [cb(aux) for cb in self.listeners.get(event, [])]
+        callbacks = [cb for cb in self.listeners.get(event, [])]
+        [cb(event, aux) for cb in callbacks]
