@@ -21,10 +21,6 @@ def Transition(triggering_event, to_state, on_transition=None, condition=None):
     return _Transition(triggering_event, to_state, on_transition, condition)
 
 
-def get_all_transitions(from_state, transition_map):
-    return [tr for st, tr in transition_map.items() if from_state == st]
-
-
 class StateMachine(object):
     def __init__(self, transition_map, initial_state, eventbus):
         assert initial_state in transition_map.keys()
@@ -40,19 +36,25 @@ class StateMachine(object):
         for tr in self._valid_transitions:
             self._eb.unregister(tr.triggering_event, self._attempt_transition)
 
-        self._valid_transitions = get_all_transitions(self._state, self._tmap)
+        self._valid_transitions = self._tmap[from_state]
 
         # register new transitions
+        print 'found {0} transitions'.format(len(self._valid_transitions))
+        print 'setting up transitions from "{0}"'.format(from_state)
         for tr in self._valid_transitions:
+            print '    registering for {0}'.format(tr.triggering_event)
             self._eb.register(tr.triggering_event, self._attempt_transition)
 
-    def _attempt_transition(self, evt, aux=None):
-        assert evt is not None
+    def can_transition(self, event):
+        return event in [tr.triggering_event for tr in self._valid_transitions]
+
+    def _attempt_transition(self, event, aux=None):
+        assert event is not None
         found_trans = [tr for tr in self._valid_transitions
-                       if tr.triggering_event == evt]
+                       if tr.triggering_event == event]
         assert len(found_trans) == 1, 'must have one transition per event'
         trans = found_trans[0]
-        print 'cond: {0}'.format(trans.condition())
+        print 'found transition for event "{0}": {1}'.format(event, trans)
         if not trans.condition():
             print "nope"
             return
