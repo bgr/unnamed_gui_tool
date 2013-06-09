@@ -49,14 +49,14 @@ class Test_simple_door_machine():
         self.fsm = StateMachine(self.trans_map, self.closed, self.eb)
 
     def test_transitions_not_allowed_before_start(self):
-        assert self.fsm.current_state is None
+        assert self.fsm.current_state == 'NullState'
         assert all([v == 0 for v in self.check.values()])
         assert not self.fsm.can_transition('close')
         assert not self.fsm.can_transition('open')
 
     def test_in_closed_state_after_starting(self):
         self.fsm.start()
-        assert self.fsm.current_state == self.closed
+        assert self.fsm.current_state == 'Closed'
         assert self.check['closed_enter'] == 1
         assert self.check.values().count(0) == 5
         assert not self.fsm.can_transition('close')
@@ -64,7 +64,7 @@ class Test_simple_door_machine():
 
     def test_transition_to_opened(self):
         self.eb.dispatch('open')
-        assert self.fsm.current_state == self.opened
+        assert self.fsm.current_state == 'Opened'
         assert self.check['closed_enter'] == 1
         assert self.check['closed_exit'] == 1
         assert self.check['opened_enter'] == 1
@@ -76,7 +76,7 @@ class Test_simple_door_machine():
 
     def test_ignores_open_when_already_opened(self):
         self.eb.dispatch('open')
-        assert self.fsm.current_state == self.opened
+        assert self.fsm.current_state == 'Opened'
         assert self.check['closed_enter'] == 1
         assert self.check['closed_exit'] == 1
         assert self.check['opened_enter'] == 1
@@ -88,7 +88,7 @@ class Test_simple_door_machine():
 
     def test_transition_to_closed(self):
         self.eb.dispatch('close')
-        assert self.fsm.current_state == self.closed
+        assert self.fsm.current_state == 'Closed'
         assert self.check['closed_enter'] == 2
         assert self.check['closed_exit'] == 1
         assert self.check['opened_enter'] == 1
@@ -100,7 +100,7 @@ class Test_simple_door_machine():
 
     def test_ignores_close_when_already_closed(self):
         self.eb.dispatch('close')
-        assert self.fsm.current_state == self.closed
+        assert self.fsm.current_state == 'Closed'
         assert self.check['closed_enter'] == 2
         assert self.check['closed_exit'] == 1
         assert self.check['opened_enter'] == 1
@@ -112,7 +112,7 @@ class Test_simple_door_machine():
 
     def test_transition_to_opened_again(self):
         self.eb.dispatch('open')
-        assert self.fsm.current_state == self.opened
+        assert self.fsm.current_state == 'Opened'
         assert self.check['closed_enter'] == 2
         assert self.check['closed_exit'] == 2
         assert self.check['opened_enter'] == 2
@@ -124,7 +124,7 @@ class Test_simple_door_machine():
 
     def test_transition_to_closed_again(self):
         self.eb.dispatch('close')
-        assert self.fsm.current_state == self.closed
+        assert self.fsm.current_state == 'Closed'
         assert self.check['closed_enter'] == 3
         assert self.check['closed_exit'] == 2
         assert self.check['opened_enter'] == 2
@@ -185,7 +185,7 @@ class Test_loops_and_multiple_paths_machine():
         self.fsm = StateMachine(self.trans_map, self.start, self.eb)
 
     def test_transitions_not_allowed_before_start(self):
-        assert self.fsm.current_state is None
+        assert self.fsm.current_state == 'NullState'
         assert all([v == 0 for v in self.check.values()])
         assert not self.fsm.can_transition('left')
         assert not self.fsm.can_transition('right')
@@ -194,7 +194,7 @@ class Test_loops_and_multiple_paths_machine():
 
     def test_in_start_state_after_starting(self):
         self.fsm.start()
-        assert self.fsm.current_state == self.start
+        assert self.fsm.current_state == 'Start'
         assert self.check['start_enter'] == 1
         assert self.check.values().count(0) == 7
         assert self.fsm.can_transition('left')
@@ -204,7 +204,7 @@ class Test_loops_and_multiple_paths_machine():
 
     def test_transition_to_goal_via_right(self):
         self.eb.dispatch('right')
-        assert self.fsm.current_state == self.goal
+        assert self.fsm.current_state == 'Goal'
         assert self.check['start_enter'] == 1
         assert self.check['start_exit'] == 1
         assert self.check['goal_enter'] == 1
@@ -220,7 +220,7 @@ class Test_loops_and_multiple_paths_machine():
 
     def test_loop_in_goal(self):
         self.eb.dispatch('loop')
-        assert self.fsm.current_state == self.goal
+        assert self.fsm.current_state == 'Goal'
         assert self.check['start_enter'] == 1
         assert self.check['start_exit'] == 1
         assert self.check['goal_enter'] == 2
@@ -234,7 +234,7 @@ class Test_loops_and_multiple_paths_machine():
         assert self.fsm.can_transition('loop')
         assert self.fsm.can_transition('restart')
         self.eb.dispatch('loop')
-        assert self.fsm.current_state == self.goal
+        assert self.fsm.current_state == 'Goal'
         assert self.check['start_enter'] == 1
         assert self.check['start_exit'] == 1
         assert self.check['goal_enter'] == 3
@@ -248,7 +248,7 @@ class Test_loops_and_multiple_paths_machine():
         assert self.fsm.can_transition('loop')
         assert self.fsm.can_transition('restart')
         self.eb.dispatch('loop')
-        assert self.fsm.current_state == self.goal
+        assert self.fsm.current_state == 'Goal'
         assert self.check['start_enter'] == 1
         assert self.check['start_exit'] == 1
         assert self.check['goal_enter'] == 4
@@ -264,7 +264,7 @@ class Test_loops_and_multiple_paths_machine():
 
     def test_ignore_left_and_right_events_while_in_goal(self):
         self.eb.dispatch('left')
-        assert self.fsm.current_state == self.goal
+        assert self.fsm.current_state == 'Goal'
         assert self.check['start_enter'] == 1
         assert self.check['start_exit'] == 1
         assert self.check['goal_enter'] == 4
@@ -278,7 +278,7 @@ class Test_loops_and_multiple_paths_machine():
         assert self.fsm.can_transition('loop')
         assert self.fsm.can_transition('restart')
         self.eb.dispatch('right')
-        assert self.fsm.current_state == self.goal
+        assert self.fsm.current_state == 'Goal'
         assert self.check['start_enter'] == 1
         assert self.check['start_exit'] == 1
         assert self.check['goal_enter'] == 4
@@ -294,7 +294,7 @@ class Test_loops_and_multiple_paths_machine():
 
     def test_restart(self):
         self.eb.dispatch('restart')
-        assert self.fsm.current_state == self.start
+        assert self.fsm.current_state == 'Start'
         assert self.check['start_enter'] == 2
         assert self.check['start_exit'] == 1
         assert self.check['goal_enter'] == 4
@@ -310,7 +310,7 @@ class Test_loops_and_multiple_paths_machine():
 
     def test_ignore_loop_and_restart_events_while_in_start(self):
         self.eb.dispatch('loop')
-        assert self.fsm.current_state == self.start
+        assert self.fsm.current_state == 'Start'
         assert self.check['start_enter'] == 2
         assert self.check['start_exit'] == 1
         assert self.check['goal_enter'] == 4
@@ -324,7 +324,7 @@ class Test_loops_and_multiple_paths_machine():
         assert not self.fsm.can_transition('loop')
         assert not self.fsm.can_transition('restart')
         self.eb.dispatch('restart')
-        assert self.fsm.current_state == self.start
+        assert self.fsm.current_state == 'Start'
         assert self.check['start_enter'] == 2
         assert self.check['start_exit'] == 1
         assert self.check['goal_enter'] == 4
@@ -340,7 +340,7 @@ class Test_loops_and_multiple_paths_machine():
 
     def test_transition_to_goal_via_left(self):
         self.eb.dispatch('left')
-        assert self.fsm.current_state == self.goal
+        assert self.fsm.current_state == 'Goal'
         assert self.check['start_enter'] == 2
         assert self.check['start_exit'] == 2
         assert self.check['goal_enter'] == 5
