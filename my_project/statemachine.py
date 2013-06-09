@@ -1,16 +1,32 @@
 from collections import namedtuple as _n
 
-_State = _n('State', 'on_enter, on_exit')
 _Transition = _n('Transition', 'triggering_event, to_state,'
                                'on_transition, condition')
 
 
-def State(on_enter=None, on_exit=None):
-    if on_enter is None:
-        on_enter = lambda: None
-    if on_exit is None:
-        on_exit = lambda: None
-    return _State(on_enter, on_exit)
+class State(object):
+    def __init__(self):
+        self._interests = {}  # override this value
+
+    @property
+    def parent_fsm(self):
+        return self._fsm
+
+    @parent_fsm.setter
+    def parent_fsm(self, fsm):
+        self._fsm = fsm
+
+    def enter(self):
+        # override this method
+        pass
+
+    def exit(self):
+        # override this method
+        pass
+
+    @property
+    def interests(self):
+        return self._interests
 
 
 def Transition(triggering_event, to_state, on_transition=None, condition=None):
@@ -58,18 +74,18 @@ class StateMachine(object):
         if not trans.condition():
             print "nope"
             return
-        self._state.on_exit()
+        self._state.exit()
         self._state = trans.to_state
         self._setup_transition_listeners(self._state)
         trans.on_transition()
-        self._state.on_enter()
+        self._state.enter()
         print "transitioned"
 
     def start(self):
         assert not self._running
         self._state = self._initial_state
         self._setup_transition_listeners(self._state)
-        self._state.on_enter()
+        self._state.enter()
         self._running = True
 
     @property

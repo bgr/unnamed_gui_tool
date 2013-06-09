@@ -6,7 +6,7 @@ from my_project.eventbus import EventBus
 class Test_simple_door_machine():
     def setup_class(self):
         self.eb = EventBus()
-        self.check = {
+        check = {
             'closed_enter': 0,
             'closed_exit': 0,
             'opened_enter': 0,
@@ -14,18 +14,29 @@ class Test_simple_door_machine():
             'trans_opening': 0,
             'trans_closing': 0,
         }
+        self.check = check
 
         def get_callback(key):
             def func():
-                print 'callback triggered for "{0}"'.format(key)
                 self.check[key] += 1
             return func
 
-        closed = State(on_enter=get_callback('closed_enter'),
-                       on_exit=get_callback('closed_exit'),)
+        class Closed(State):
+            def enter(self):
+                check['closed_enter'] += 1
 
-        opened = State(on_enter=get_callback('opened_enter'),
-                       on_exit=get_callback('opened_exit'),)
+            def exit(self):
+                check['closed_exit'] += 1
+
+        class Opened(State):
+            def enter(self):
+                check['opened_enter'] += 1
+
+            def exit(self):
+                check['opened_exit'] += 1
+
+        closed = Closed()
+        opened = Opened()
 
         self.trans_map = {
             closed: [
@@ -127,7 +138,7 @@ class Test_simple_door_machine():
 class Test_loops_and_multiple_paths_machine():
     def setup_class(self):
         self.eb = EventBus()
-        self.check = {
+        check = {
             'start_enter': 0,
             'start_exit': 0,
             'goal_enter': 0,
@@ -137,18 +148,29 @@ class Test_loops_and_multiple_paths_machine():
             'trans_loop': 0,
             'trans_restart': 0,
         }
+        self.check = check
 
         def get_callback(key):
             def func():
-                print 'callback triggered for "{0}"'.format(key)
                 self.check[key] += 1
             return func
 
-        start = State(on_enter=get_callback('start_enter'),
-                      on_exit=get_callback('start_exit'),)
+        class Start(State):
+            def enter(self):
+                check['start_enter'] += 1
 
-        goal = State(on_enter=get_callback('goal_enter'),
-                     on_exit=get_callback('goal_exit'),)
+            def exit(self):
+                check['start_exit'] += 1
+
+        class Goal(State):
+            def enter(self):
+                check['goal_enter'] += 1
+
+            def exit(self):
+                check['goal_exit'] += 1
+
+        start = Start()
+        goal = Goal()
 
         self.trans_map = {
             start: [
