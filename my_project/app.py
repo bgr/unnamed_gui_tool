@@ -3,6 +3,9 @@ from util import invokeLater
 from model import PaintingModel, Rectangle, Circle, Add_element
 from eventbus import EventBus
 from canvas import CanvasView, CanvasController
+import logging
+
+logging.basicConfig(level=logging.DEBUG)
 
 
 class PaintFrame(JFrame):
@@ -14,13 +17,13 @@ class PaintFrame(JFrame):
         self.size = (500, 400)
         self.visible = True
 
-        canvas = CanvasView(300, 200)
+        canvas = CanvasView(300, 200, eventbus)
         canvas_ctrl = CanvasController(canvas, model, eventbus)
 
         btn_circle = JButton('Circle',
                              actionPerformed=canvas_ctrl.set_circle_tool)
         btn_rect = JButton('Rectangle',
-                           actionPerformed=canvas_ctrl.set_rect_tool)
+                           actionPerformed=canvas_ctrl.set_rectangle_tool)
         self.add(canvas)
         self.add(btn_circle)
         self.add(btn_rect)
