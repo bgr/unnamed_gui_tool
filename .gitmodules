@@ -1,0 +1,3 @@
+[submodule "submodules/hsmpy"]
+	path = submodules/hsmpy
+	url = https://github.com/bgr/hsmpy.git
