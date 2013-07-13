@@ -4,6 +4,8 @@ develop-eggs/
 eggs/
 *.egg-info/
 .ropeproject/
+tests/__pycache__
 
 *$py.class
 *.swp
+*.pyc
