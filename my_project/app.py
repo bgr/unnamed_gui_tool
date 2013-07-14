@@ -1,11 +1,9 @@
 from javax.swing import JFrame, JButton, BoxLayout
 from util import invokeLater
-from model import PaintingModel, Rectangle, Circle, Add_element
-from eventbus import EventBus
-from canvas import CanvasView, CanvasController
-import logging
-
-logging.basicConfig(level=logging.DEBUG)
+import canvas
+from model import PaintingModel, Rectangle, Circle
+from hsmpy import HSM, EventBus
+from events import Commit_To_Model
 
 
 class PaintFrame(JFrame):
@@ -17,27 +15,24 @@ class PaintFrame(JFrame):
         self.size = (500, 400)
         self.visible = True
 
-        canvas = CanvasView(300, 200, eventbus)
-        canvas_ctrl = CanvasController(canvas, model, eventbus)
+        canvas_view, canvas_states, canvas_trans = canvas.make(eventbus)
 
-        btn_circle = JButton('Circle',
-                             actionPerformed=canvas_ctrl.set_circle_tool)
-        btn_rect = JButton('Rectangle',
-                           actionPerformed=canvas_ctrl.set_rectangle_tool)
-        self.add(canvas)
-        self.add(btn_circle)
-        self.add(btn_rect)
-        eventbus.register(Add_element, model.add)
+        canvas_hsm = HSM(canvas_states, canvas_trans)
+        canvas_hsm.start(eventbus)
+
+        #btn_circle = JButton('Circle',
+        # actionPerformed=canvas_ctrl.set_circle_tool)
+        #btn_rect = JButton('Rectangle',
+                           #actionPerformed=canvas_ctrl.set_rectangle_tool)
+        self.add(canvas_view)
+        #self.add(btn_circle)
+        #self.add(btn_rect)
 
 
 @invokeLater
-def run_app():
-    eb = EventBus()
-    model = PaintingModel(eb)
+def run():
+    eventbus = EventBus()
+    model = PaintingModel(eventbus)
     model.elems = [Circle(20, 30, 40), Rectangle(30, 40, 10, 20)]
-    PaintFrame(model, eb).locationRelativeTo = None
-    PaintFrame(model, eb)
-
-
-if __name__ == '__main__':
-    run_app()
+    PaintFrame(model, eventbus).locationRelativeTo = None
+    PaintFrame(model, eventbus)

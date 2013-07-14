@@ -1,81 +1,67 @@
 from javax.swing import JPanel
 from java.awt import Color
-from model import Rectangle, Circle, Add_element, Element_added
-from statemachine import StateMachine, State
-from statemachine import Transition as T
+from model import Rectangle, Circle
+from hsmpy import State, CompositeState, Initial
+from hsmpy import Transition as T
+from hsmpy import InternalTransition as Internal
 import logging
+
+from events import (Mouse_Down, Mouse_Up, Mouse_Move, Tool_Changed,
+                    Commit_To_Model, Model_Changed)
 
 
 _log = logging.getLogger(__name__)
 
 
-class Idle(State):
-    def __init__(self, eventbus):
-        self.eb = eventbus
-        self._interests = {
-            'mouse_down': self.on_mouse_down,
-        }
+class Top(CompositeState):
+    def enter(self, evt, hsm):
+        hsm.data.tool = 'rectangle'
+        _log.debug('entered Top, set tool to {0}'.format(hsm.data.tool))
 
-    def enter(self):
+    def exit(self, evt, hsm):
+        _log.debug('exiting Top')
+
+
+class Drawing(CompositeState):
+    def enter(self, evt, hsm):
+        _log.debug('entered Drawing superstate')
+
+    def exit(self, evt, hsm):
+        _log.debug('exiting Drawing superstate')
+
+
+class Idle(State):
+    def enter(self, evt, hsm):
         _log.debug('entered Idle')
 
-    def exit(self):
+    def exit(self, evt, hsm):
         _log.debug('exiting Idle')
 
-    def on_mouse_down(self, evt, aux):
-        _log.debug('Idle mouse down')
-        _log.debug(evt)
-        # switch state
-        self.eb.dispatch('draw_rectangle')
+
+def on_move(evt, hsm):
+    _log.debug('move {0}'.format(evt))
 
 
-class Drawing_Rectangle(State):
-    def __init__(self):
-        self._interests = {
-            'mouse_down': self.on_mouse_down,
-            'mouse_up': self.on_mouse_up,
-        }
-
-    def enter(self):
+class DrawingRectangle(State):
+    def enter(self, mouse_evt, hsm):
         _log.debug('entered Drawing_Rectangle')
+        self.start_x = mouse_evt.x
+        self.start_y = mouse_evt.y
 
-    def exit(self):
+    def exit(self, mouse_evt, hsm):
         _log.debug('exiting Drawing_Rectangle')
-
-    def on_mouse_down(self, evt, aux):
-        _log.debug('Drawing_Rectangle mouse down')
-        _log.debug(evt)
-
-    def on_mouse_up(self, evt, aux):
-        _log.debug('Drawing_Rectangle mouse up')
-        _log.debug(evt)
+        w = mouse_evt.x - self.start_x
+        h = mouse_evt.y - self.start_y
+        hsm.data.element = Rectangle(self.start_x, self.start_y, w, h)
 
 
-class Drawing_Circle(State):
-    def __init__(self):
-        self._interests = {
-            'mouse_down': self.on_mouse_down,
-            'mouse_up': self.on_mouse_up,
-            'mouse_move': self.on_mouse_move,
-        }
-
-    def enter(self):
+class DrawingCircle(State):
+    def enter(self, mouse_evt, hsm):
         _log.debug('entered Drawing_Circle')
 
-    def exit(self):
+    def exit(self, mouse_evt, hsm):
         _log.debug('exiting Drawing_Circle')
 
-    def on_mouse_down(self, evt, aux):
-        _log.debug('Drawing_Circle mouse down')
-        _log.debug(evt)
-
-    def on_mouse_up(self, evt, aux):
-        _log.debug('Drawing_Circle mouse up')
-        _log.debug(evt)
-
-    def on_mouse_move(self, evt, aux):
-        _log.debug('Drawing_Circle mouse move')
-        _log.debug(evt)
 
 
 class CanvasView(JPanel):
@@ -86,42 +72,14 @@ class CanvasView(JPanel):
         self.preferredSize = (width, height)
         self._elems = []
 
-        self.mousePressed = lambda e: eb.dispatch('mouse_down', (e.x, e.y))
-        self.mouseReleased = lambda e: eb.dispatch('mouse_up', (e.x, e.y))
-        self.mouseMoved = lambda e: eb.dispatch('mouse_move', (e.x, e.y))
+        self.mousePressed = lambda e: eb.dispatch(Mouse_Down(e.x, e.y))
+        self.mouseReleased = lambda e: eb.dispatch(Mouse_Up(e.x, e.y))
+        self.mouseMoved = lambda e: eb.dispatch(Mouse_Move(e.x, e.y))
 
-        idle = Idle(eb)
-        drawing_rectangle = Drawing_Rectangle()
-        drawing_circle = Drawing_Circle()
-
-        transition_map = {
-            idle: [
-                T('draw_rectangle', drawing_rectangle,
-                  self._on_drawing_rectangle_trans),
-                T('draw_circle', drawing_circle,
-                  self._on_drawing_circle_trans), ],
-            drawing_rectangle: [
-                T('commit', idle, self._on_commit),
-                T('cancel', idle, self._on_cancel), ],
-            drawing_circle: [
-                T('commit', idle, self._on_commit),
-                T('cancel', idle, self._on_cancel), ],
+        self.draw_handlers = {
+            Circle: self.draw_circle,
+            Rectangle: self.draw_rectangle,
         }
-
-        self.fsm = StateMachine(transition_map, idle, eb)
-        self.fsm.start()
-
-    def _on_drawing_rectangle_trans(self):
-        _log.debug('transition to drawing_rectangle')
-
-    def _on_drawing_circle_trans(self):
-        _log.debug('transition to drawing_circle')
-
-    def _on_commit(self, evt, aux=None):
-        _log.debug('commit')
-
-    def _on_cancel(self, evt, aux=None):
-        _log.debug('cancel')
 
     @property
     def elems(self):
@@ -136,21 +94,13 @@ class CanvasView(JPanel):
         self._elems.append(elem)
         self.repaint()
 
-    def set_circle_tool(self):
-        _log.debug('Set circle tool')
-        self.tool = Circle
-
-    def set_rectangle_tool(self):
-        _log.debug('Set rectangle tool')
-        self.tool = Rectangle
-
     def paintComponent(self, g):
         g.setColor(Color(255, 255, 255))
         g.fillRect(0, 0, self.preferredSize.width, self.preferredSize.height)
 
         g.setColor(Color(25, 25, 25))
-        #for el in self.elems:
-            #self.draw_handlers[el.__class__](g, el)
+        for el in self.elems:
+            self.draw_handlers[el.__class__](g, el)
 
     def draw_circle(self, g, el):
         g.drawOval(el.x, el.y, el.radius, el.radius)
@@ -165,23 +115,62 @@ class CanvasView(JPanel):
         g.drawRect(el.x, el.y, el.width, el.height)
 
 
-class CanvasController():
-    def __init__(self, canvas, model, eventbus):
-        self.view = canvas
-        self.model = model
-        self.eb = eventbus
-        canvas.elems = model.elems
-        eventbus.register(Element_added, self.on_added)
+def make(eventbus):
+    view = CanvasView(300, 300, eventbus)
 
-    def on_added(self, elem):
-        self.view.add(elem)
+    states = {
+        'top': Top({
+            'idle': Idle(),
+            'drawing': Drawing({
+                'drawing_rectangle': DrawingRectangle(),
+                'drawing_circle': DrawingCircle(),
+            })
+        })
+    }
 
-    def add_new(self, elem):
-        "Re-dispatches to eventbus when view dispatches newly added element"
-        self.eb.dispatch(Add_element, elem)
+    #tool_is_combo = lambda e, hsm: hsm.data.tool == 'combo'
+    #tool_is_rectangle = lambda e, hsm: hsm.data.tool == 'rectangle'
+    #tool_is_circle = lambda e, hsm: hsm.data.tool == 'circle'
 
-    def set_circle_tool(self, _):
-        self.view.set_circle_tool()
+    def print_tool(e, h):
+        _log.info('event {0}'.format(e))
+        _log.info('current tool {0}'.format(h.data.tool))
 
-    def set_rectangle_tool(self, _):
-        self.view.set_rectangle_tool()
+    def remember_tool(evt, hsm):
+        hsm.data.tool = evt.data
+        _log.info('remembered selected tool {0}'.format(hsm.data.tool))
+
+    def draw_added_element(evt, hsm):
+        _log.info('draw added element {0}'.format(evt.data))
+        view.add(evt.data)
+
+
+    trans = {
+        'top': {
+            Initial: T('idle'),
+            Tool_Changed: Internal(action=remember_tool),
+            Model_Changed: Internal(action=draw_added_element),
+        },
+        'idle': {
+            Mouse_Down: T('drawing_rectangle', action=print_tool),  # guard!
+        },
+        'drawing': {
+            Initial: T('drawing_circle'),
+            Mouse_Up: T('idle', action=commit_to_model),
+        },
+        'drawing_rectangle': {
+            Mouse_Move: Internal(action=on_move),
+        },
+        'drawing_circle': {
+            Mouse_Move: Internal(action=on_move),
+        },
+    }
+
+    return (view, states, trans)
+
+
+def commit_to_model(evt, hsm):
+    _log.info("committing to model {0}".format(hsm.data.element))
+    # dispatch event to add to model
+    hsm.eb.dispatch(Commit_To_Model(hsm.data.element))
+    hsm.data.element = None

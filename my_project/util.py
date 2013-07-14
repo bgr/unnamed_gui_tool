@@ -1,5 +1,6 @@
 from javax.swing import SwingUtilities
 from java.lang import Runnable
+from javax.swing import JButton, ImageIcon
 
 
 class Run(Runnable):
@@ -19,3 +20,16 @@ def invokeLater(func):
     def wrapped(*args, **kwargs):
         SwingUtilities.invokeLater(Run(func, *args, **kwargs))
     return wrapped
+
+
+def make_button(icon_filename, action_cmd_str, tooltip_text, alt_text):
+    """Returns a JButton"""
+    button = JButton()
+    button.actionCommand = action_cmd_str
+    button.toolTipText = tooltip_text
+    if icon_filename:
+        button.icon = ImageIcon(icon_filename, alt_text)
+    else:
+        button.text = alt_text
+        print "Resource not found: " + icon_filename
+    return button
