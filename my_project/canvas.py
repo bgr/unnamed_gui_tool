@@ -1,7 +1,7 @@
 from javax.swing import JPanel
 from java.awt import Color
 from model import Rectangle, Circle
-from hsmpy import State, CompositeState, Initial
+from hsmpy import State, Initial
 from hsmpy import Transition as T
 from hsmpy import InternalTransition as Internal
 import logging
@@ -12,62 +12,39 @@ from events import (Mouse_Down, Mouse_Up, Mouse_Move, Tool_Changed,
 
 _log = logging.getLogger(__name__)
 
+from collections import namedtuple
 
-class Top(CompositeState):
+
+class LoggingState(State):
     def enter(self, evt, hsm):
-        hsm.data.tool = 'rectangle'
-        _log.debug('entered Top, set tool to {0}'.format(hsm.data.tool))
+        _log.debug('entering {0}'.format(self.name))
 
     def exit(self, evt, hsm):
-        _log.debug('exiting Top')
+        _log.debug('exiting {0}'.format(self.name))
 
 
-class Drawing(CompositeState):
-    def enter(self, evt, hsm):
-        _log.debug('entered Drawing superstate')
-
-    def exit(self, evt, hsm):
-        _log.debug('exiting Drawing superstate')
+# alias class so that it can easily be switched
+S = LoggingState
 
 
-class Idle(State):
-    def enter(self, evt, hsm):
-        _log.debug('entered Idle')
-
-    def exit(self, evt, hsm):
-        _log.debug('exiting Idle')
+def draw_rectangle(el, g):
+    g.drawRect(el.x, el.y, el.radius, el.radius)
 
 
-def on_move(evt, hsm):
-    _log.debug('move {0}'.format(evt))
+def draw_circle(el, g):
+    g.drawOval(el.x, el.y, el.radius, el.radius)
 
 
-class DrawingRectangle(State):
-    def enter(self, mouse_evt, hsm):
-        _log.debug('entered Drawing_Rectangle')
-        self.start_x = mouse_evt.x
-        self.start_y = mouse_evt.y
-
-    def exit(self, mouse_evt, hsm):
-        _log.debug('exiting Drawing_Rectangle')
-        w = mouse_evt.x - self.start_x
-        h = mouse_evt.y - self.start_y
-        hsm.data.element = Rectangle(self.start_x, self.start_y, w, h)
-
-
-class DrawingCircle(State):
-    def enter(self, mouse_evt, hsm):
-        _log.debug('entered Drawing_Circle')
-
-    def exit(self, mouse_evt, hsm):
-        _log.debug('exiting Drawing_Circle')
-
+element_components = {
+    Circle: draw_circle,
+    Rectangle: draw_rectangle,
+}
 
 
 class CanvasView(JPanel):
 
     def __init__(self, width, height, eb):
-        super(CanvasView, self).__init__()
+        super(self.__class__, self).__init__()
         self.size = (width, height)
         self.preferredSize = (width, height)
         self._elems = []
@@ -76,10 +53,8 @@ class CanvasView(JPanel):
         self.mouseReleased = lambda e: eb.dispatch(Mouse_Up(e.x, e.y))
         self.mouseMoved = lambda e: eb.dispatch(Mouse_Move(e.x, e.y))
 
-        self.draw_handlers = {
-            Circle: self.draw_circle,
-            Rectangle: self.draw_rectangle,
-        }
+        self._elems = []
+        self._selected_ids = set([])
 
     @property
     def elems(self):
@@ -88,42 +63,44 @@ class CanvasView(JPanel):
     @elems.setter
     def elems(self, new_elems):
         self._elems = new_elems
-        self.repaint()
+        for el in new_elems:
+            comp = element_components[el.__class__](el)
+            self.add(comp)
+        #self.repaint()
 
-    def add(self, elem):
+    def add_elem(self, elem):
         self._elems.append(elem)
         self.repaint()
 
+    @property
+    def selection(self):
+        return self._selected_ids
+
+    @selection.setter
+    def selection(self, elem_id_set):
+        self._selected_ids = elem_id_set
+        self.repaint()
+
+
     def paintComponent(self, g):
-        g.setColor(Color(255, 255, 255))
-        g.fillRect(0, 0, self.preferredSize.width, self.preferredSize.height)
-
-        g.setColor(Color(25, 25, 25))
+        # TODO: repaint only changed regions
         for el in self.elems:
-            self.draw_handlers[el.__class__](g, el)
-
-    def draw_circle(self, g, el):
-        g.drawOval(el.x, el.y, el.radius, el.radius)
-
-    def draw_rectangle(self, g, el):
-        g.drawRect(el.x, el.y, el.width, el.height)
-
-    def add_circle(self, g, el):
-        g.drawOval(el.x, el.y, el.radius, el.radius)
-
-    def add_rectangle(self, g, el):
-        g.drawRect(el.x, el.y, el.width, el.height)
+            self.draw_handlers[el.__class__](el, g)
 
 
 def make(eventbus):
     view = CanvasView(300, 300, eventbus)
 
+    def set_active_tool(self, evt, hsm):
+        _log.info("set tool to rect")
+        hsm.data.tool = 'rectangle'
+
     states = {
-        'top': Top({
-            'idle': Idle(),
-            'drawing': Drawing({
-                'drawing_rectangle': DrawingRectangle(),
-                'drawing_circle': DrawingCircle(),
+        'top': S(on_enter=set_active_tool, states={
+            'idle': S(),
+            'drawing': S({
+                'drawing_rectangle': S(),
+                'drawing_circle': S(),
             })
         })
     }

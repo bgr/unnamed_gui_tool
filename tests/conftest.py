@@ -15,5 +15,3 @@ paths_to_insert = [hsmpy_dir]
 import sys
 for path in paths_to_insert:
     sys.path.insert(0, path)
-
-print sys.path

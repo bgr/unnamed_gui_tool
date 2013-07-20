@@ -1,4 +1,4 @@
-from hsmpy import Event, State, CompositeState, Initial
+from hsmpy import Event, State, Initial
 from hsmpy import Transition as T
 from javax.swing import JToolBar
 from util import make_button
