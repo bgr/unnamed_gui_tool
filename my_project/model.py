@@ -1,17 +1,32 @@
-from collections import namedtuple
 import logging
+from collections import namedtuple
 
+from util import duplicates
 from events import Commit_To_Model, Model_Changed
 
 _log = logging.getLogger(__name__)
 
 
 Change = namedtuple('Change', 'old, new')
+Insert = namedtuple('Insert', 'elem')
+Remove = namedtuple('Remove', 'elem')
 
 
 # model elements
 
 class BaseElement(namedtuple('BaseElement', 'x, y, width, height')):
+    def __init__(self, x, y, width, height):
+        if width == 0 or height == 0:
+            raise ValueError("Dimensions cannot be 0")
+        if width < 0:
+            x -= -width
+            width = -width
+        if height < 0:
+            y -= -height
+            height = -height
+        #float_args = map(float, [x, y, width, height])
+        super(self.__class__, self).__init__(x, y, width, height)
+
     def __repr__(self):
         return '{0}(x={1}, y={2}, width={3}, height={4})'.format(
             self.__class__.__name__, self.x, self.y, self.width, self.height)
@@ -66,16 +81,10 @@ class PaintingModel(object):
 
 def commit(changes, changelog, eb, elems):
     """Performs the changes to model's elements and informs listeners."""
-    _log.info('Model got changelist {0}'.format(changelist))
+    _log.info('Model got changelist {0}'.format(changes))
 
-    # validate the changelist
-    changes = validate(changes, elems)
-
-    to_remove = (old for old, new in changes
-                 if old is not None and new is None)
-    to_insert = (old for old, new in changes
-                 if old is None and new is not None)
-    to_change = (ch for ch in changes if ch.old != ch.new)
+    parsed = parse(changes, elems)
+    to_remove, to_change, to_insert = parsed
 
     for el in to_remove:
         elems.remove(el)
@@ -85,41 +94,71 @@ def commit(changes, changelog, eb, elems):
 
     elems += to_insert
 
-    changelog += [changes]  # add the list altogether, not just elements
-    eb.dispatch(Model_Changed(changelist))
+    changelog += [parsed]  # add the list altogether, not just elements
+    eb.dispatch(Model_Changed(parsed[:]))  # listeners get a copy
 
 
-def validate(changelist, existing):
-    validated = []
-    for old, new in changelist:
-        if old is None and new is None:
-            raise ValueError("Invalid change, *old* and *new* "
-                             "cannot both be None")
-        if old is not None and not old in existing:
-            raise ValueError("Invalid change, *old* refers to "
-                             "element that isn't in model")
-        if new is not None:
-            new = fix(new)
+def parse(changelist, existing):
+    """
+        Validates changes in changelist and returns tuple:
+            (validated_changelist, elems_to_remove, changed_elems, new_elems)
+    """
+    if not all(isinstance(c, (Change, Remove, Insert)) for c in changelist):
+        raise ValueError("Invalid changes in changelist")
 
-        change = Change(old, new)
-        # skip elements without change and elements identical to existing
-        # and don't allow duplicates that might be in changelist itself
-        if old != new and new not in existing and change not in validated:
-            validated += [change]
-    return validated
+    to_remove = filter(lambda ch: isinstance(ch, Remove), changelist)
+    to_change = filter(lambda ch: isinstance(ch, Change), changelist)
+    to_insert = filter(lambda ch: isinstance(ch, Insert), changelist)
+
+    is_elem = lambda el: isinstance(el, BaseElement)
+    change_ok = lambda ch: is_elem(ch.old) and is_elem(ch.new)
+
+    if not (all(is_elem(el) for el in to_remove + to_insert)
+            and all(change_ok(c) for c in to_change)):
+        raise ValueError("Changes with invalid elements in changelist")
+
+    # element have valid types at this point
+    # now validate element values
+
+    olds = [ch.old for ch in to_change]
+    news = [ch.new for ch in to_change]
+    if not all(old in existing for old in olds):
+        raise ValueError("Changing element that's not in the model")
+    if not all(el in existing for el in to_remove):
+        raise ValueError("Removing element that's not in the model")
+    if any(new in existing for new in news):
+        raise ValueError("Changing into element that's already in model")
+    if any(el in existing for el in to_insert):
+        raise ValueError("Inserting element already present in the model")
+
+    if duplicates(to_remove):
+        raise ValueError("Removing same element multiple times")
+    if duplicates(to_change):
+        raise ValueError("Changing same element multiple times")
+    if duplicates(to_insert):
+        raise ValueError("Inserting same element multiple times")
+    if duplicates(to_remove + to_insert):
+        raise ValueError("Removing and inserting same element")
+    if duplicates(to_remove + olds + news):
+        raise ValueError("Removing and changing same element")
+    if duplicates(to_insert + olds + news):
+        raise ValueError("Changing and inserting identical elements")
+
+    # everything ok
+    return (to_remove, to_change, to_insert)
 
 
-def fix(elem):
-    if elem.width == 0 or elem.height == 0:
-        raise ValueError("Element with no dimensions: {0}".format(elem))
+#def fix(elem):
+    #if elem.width == 0 or elem.height == 0:
+        #raise ValueError("Element with no dimensions: {0}".format(elem))
 
-    x, y, w, h = elem
-    if elem.width < 0:
-        x -= -elem.width
-        w = -elem.width
-    if elem.height < 0:
-        y -= -elem.height
-        h = -elem.height
-    new_elem = elem._make((x, y, w, h))
-    _log.info("Model fixed element {0} into {1}".format(elem, new_elem))
-    return new_elem
+    #x, y, w, h = elem
+    #if elem.width < 0:
+        #x -= -elem.width
+        #w = -elem.width
+    #if elem.height < 0:
+        #y -= -elem.height
+        #h = -elem.height
+    #new_elem = elem._make((x, y, w, h))
+    #_log.info("Model fixed element {0} into {1}".format(elem, new_elem))
+    #return new_elem
