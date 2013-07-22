@@ -21,11 +21,11 @@ class Test_base_class:
     def test_doesnt_take_arguments(self):
         with pytest.raises(TypeError) as err:
             Record(1)
-        assert 'Record takes 0 items, got 1' in err.value
+        assert 'Record takes exactly 0 items, got 1' in err.value.message
 
         with pytest.raises(TypeError) as err:
             Record(1, b=2)
-        assert 'Record takes 0 items, got 2' in err.value
+        assert 'Record takes exactly 0 items, got 2' in err.value.message
 
     def test_cannot_set_keys(self):
         r = Record()
@@ -266,15 +266,15 @@ class Test_grandchildren:
     def test_cannot_instantiate_without_parents_keys(self):
         with pytest.raises(TypeError) as err:
             self.Ch1(2, 3)
-        assert 'takes 4' in err.value.message
+        assert 'takes exactly 4' in err.value.message
 
         with pytest.raises(TypeError) as err:
             self.Ch2(c21=4, c22=5, c23=6)
-        assert 'takes 5' in err.value.message
+        assert 'takes exactly 5' in err.value.message
 
         with pytest.raises(TypeError) as err:
             self.Grch22(4, 5, 6, 7, 8)
-        assert 'takes 7' in err.value.message
+        assert 'takes exactly 7' in err.value.message
 
     def test_instantiate_requires_parents_keys(self):
         self.Ch1(p1=2, mm=3, c11=4, c12=5)
@@ -390,43 +390,104 @@ class Test_grandchildren:
 
 
 
-class Test_key_naming_format:
+class Test_valid_key_names:
 
     @pytest.mark.parametrize('key', [
-        '',
-        ' ',
-        '9',
-        '99',
-        '9a',
-        'a b',
-        'a-b',
-        'a!',
-        '!',
-        '+',
-        'a+b',
-        'a+',
-        'def',
-        'is',
-        'for',
+        '', ' ', '$', '$a', 'a$', '@', 'a@', '@a', '9', '99', '9a', 'a b',
+        'a-b', 'a!', '!', '+', 'a+b', 'a+', 'def', 'is', 'for',
     ])
-    def test_regex_disallowed(self, key):
+    def test_disallowed(self, key):
         assert not is_valid_identifier(key)
         with pytest.raises(TypeError) as err:
             class X(Record):
-                keys = (key,)
-        assert 'Invalid keys' in err.value
+                keys = ('a', key, 'b')
+        assert 'Invalid keys' in err.value and key in err.value
 
     @pytest.mark.parametrize('key', [
-        'a',
-        'hey',
-        'hElLo',
-        'HELLO',
-        'H9_l__lo',
-        '_9',
+        'a', 'hey', 'hElLo', 'HELLO', 'H9_l__lo', '_9',
     ])
-    def test_regex_allowed(self, key):
+    def test_allowed(self, key):
         assert is_valid_identifier(key)
 
         class X(Record):
             keys = (key,)
         assert X.keys == (key,)
+
+
+
+class Test_prepared_values:
+
+    def test_basic(self):
+
+        class C(Record):
+            keys = ('a', 'b',)
+
+            @classmethod
+            def prepare(_, a=1, b=2):
+                return {'a': a + 1, 'b': b + 2}
+
+        assert C() == (2, 4)
+        assert C(3, 4) == (4, 6)
+
+    def test_raises_on_returned_unrecognized_keys(self):
+
+        class C(Record):
+            keys = ('a', 'b',)
+
+            @classmethod
+            def prepare(_, **__):
+                return {'c': 3}
+
+        with pytest.raises(TypeError) as err:
+            C(1, 2)
+        assert 'match' in err.value.message
+
+
+    def test_grandchild_inherits_prepare(self):
+
+        class B(Record):
+            keys = ('a', 'b',)
+
+            @classmethod
+            def prepare(_, a=1, b=2):
+                return {'a': a + 1, 'b': b + 2}
+
+        class C(B):
+            pass
+
+        assert C() == (2, 4)
+        assert C(3, 4) == (4, 6)
+
+    def test_grandchild_overrides_prepare(self):
+
+        class B(Record):
+            keys = ('a', 'b',)
+
+            @classmethod
+            def prepare(_, a=1, b=2):
+                return {'a': a + 1, 'b': b + 2}
+
+        class C(B):
+            @classmethod
+            def prepare(_, a=3, b=4):
+                return {'a': a + 2, 'b': b + 3}
+
+        assert C() == (5, 7)
+        assert C(1, 2) == (3, 5)
+
+    def test_grandchild_calls_parents_prepare(self):
+
+        class B(Record):
+            keys = ('a', 'b',)
+
+            @classmethod
+            def prepare(_, a=1, b=2):
+                return {'a': a + 1, 'b': b + 2}
+
+        class C(B):
+            @classmethod
+            def prepare(cls, a=3, b=4):
+                return B.prepare(a + 0.1, b + 0.2)
+
+        assert C() == (4.1, 6.2)
+        assert C(4, 5) == (5.1, 7.2)
