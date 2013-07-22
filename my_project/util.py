@@ -1,4 +1,6 @@
+import re
 import collections
+from keyword import iskeyword
 
 
 def duplicates(ls):
@@ -42,6 +44,11 @@ class _RecordMeta(type):
                        + [list(dct['keys'])])
         flat_keys = [k for pkeys in parent_keys for k in pkeys]
 
+        # keys must also be valid identifiers
+        invalid = [k for k in flat_keys if not is_valid_identifier(k)]
+        if invalid:
+            raise TypeError("Invalid keys: {0}".format(', '.join(invalid)))
+
         # filter out duplicate keys, parents' keys are included
         # before any child's duplicate keys
         dct['keys'] = tuple(k for k, seen in with_preceding(flat_keys)
@@ -52,7 +59,10 @@ class _RecordMeta(type):
     def __setattr__(cls, _, __):  # mainly to prevent modifying Class.keys
         raise TypeError("Nope")
 
-#re.match("[_A-Za-z][_a-zA-Z0-9]*$",my_var)
+
+def is_valid_identifier(str_val):
+    return (not iskeyword(str_val) and
+            re.match("[_A-Za-z][_a-zA-Z0-9]*$", str_val) is not None)
 
 
 class Record(tuple):

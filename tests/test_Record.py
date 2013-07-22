@@ -1,5 +1,5 @@
 import pytest
-from my_project.util import Record
+from my_project.util import Record, is_valid_identifier
 
 
 class Test_base_class:
@@ -387,3 +387,46 @@ class Test_grandchildren:
         assert self.Grch12.keys == ('p1', 'mm', 'c11', 'c12', 'b', 'g122')
         assert self.Grch21.keys == ('p1', 'mm', 'c21', 'c22', 'c23', 'g211')
         assert self.Grch22.keys == ('p1', 'mm', 'c21', 'c22', 'c23', 'x', 'yz')
+
+
+
+class Test_key_naming_format:
+
+    @pytest.mark.parametrize('key', [
+        '',
+        ' ',
+        '9',
+        '99',
+        '9a',
+        'a b',
+        'a-b',
+        'a!',
+        '!',
+        '+',
+        'a+b',
+        'a+',
+        'def',
+        'is',
+        'for',
+    ])
+    def test_regex_disallowed(self, key):
+        assert not is_valid_identifier(key)
+        with pytest.raises(TypeError) as err:
+            class X(Record):
+                keys = (key,)
+        assert 'Invalid keys' in err.value
+
+    @pytest.mark.parametrize('key', [
+        'a',
+        'hey',
+        'hElLo',
+        'HELLO',
+        'H9_l__lo',
+        '_9',
+    ])
+    def test_regex_allowed(self, key):
+        assert is_valid_identifier(key)
+
+        class X(Record):
+            keys = (key,)
+        assert X.keys == (key,)
