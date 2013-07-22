@@ -5,38 +5,13 @@ from my_project.model import _BaseElement as BE
 from hsmpy import EventBus
 
 
-class Test_changes(object):
-    def test_Modify(self):
-        Modify(elem=BE(9, 9, 9, 9), modified=BE(9, 9, 9, 9))
-
-    def test_Modify_raises_on_invalid_elements(self):
-        with pytest.raises(AssertionError):
-            Modify(None, BE(9, 9, 9, 9))
-        with pytest.raises(AssertionError):
-            Modify(BE(9, 9, 9, 9), 23)
-
-    def test_Remove(self):
-        Remove(elem=BE(9, 9, 9, 9))
-
-    def test_Remove_raises_on_invalid_elements(self):
-        with pytest.raises(AssertionError):
-            Remove('x')
-        with pytest.raises(AssertionError):
-            Remove(None)
-
-    def test_Insert(self):
-        Insert(elem=BE(9, 9, 9, 9))
-
-    def test_Insert_raises_on_invalid_elements(self):
-        with pytest.raises(AssertionError):
-            Insert('x')
-        with pytest.raises(AssertionError):
-            Insert(Remove(BE(9, 9, 9, 9)))
-
-
 class Test_elements(object):
     def test_BaseElement(self):
         BE(9, 9, 9, 9)
+
+    def test_comparable_BaseElement(self):
+        assert BE(1, 2, 9, 9) == BE(1, 2, 9, 9)
+        assert BE(1, 2, 9, 9) != BE(2, 2, 9, 9)
 
     def test_raises_on_invalid_values(self):
         with pytest.raises(TypeError):
@@ -63,6 +38,46 @@ class Test_elements(object):
     def test_fix_negative_both(self):
         el = BE(20, 30, -100, -40)
         assert el == BE(-80, -10, 100, 40)
+
+
+
+class Test_changes(object):
+    def test_Remove(self):
+        Remove(elem=BE(9, 9, 9, 9))
+
+    def test_comparable_Remove(self):
+        assert Remove(BE(1, 2, 9, 9)) == Remove(BE(1, 2, 9, 9))
+
+    def test_Remove_raises_on_invalid_elements(self):
+        with pytest.raises(AssertionError):
+            Remove('x')
+        with pytest.raises(AssertionError):
+            Remove(None)
+
+    def test_Insert(self):
+        Insert(elem=BE(9, 9, 9, 9))
+
+    def test_comparable_Insert(self):
+        assert Insert(BE(1, 2, 9, 9)) == Insert(BE(1, 2, 9, 9))
+
+    def test_Insert_raises_on_invalid_elements(self):
+        with pytest.raises(AssertionError):
+            Insert('x')
+        with pytest.raises(AssertionError):
+            Insert(Remove(BE(9, 9, 9, 9)))
+
+    def test_Modify(self):
+        Modify(elem=BE(9, 9, 9, 9), modified=BE(9, 9, 9, 9))
+
+    def test_Modify_comparable(self):
+        assert Modify(BE(1, 2, 3, 4), BE(9, 9, 9, 9)) == Modify(BE(1, 2, 3, 4),
+                                                                BE(9, 9, 9, 9))
+
+    def test_Modify_raises_on_invalid_elements(self):
+        with pytest.raises(AssertionError):
+            Modify(None, BE(9, 9, 9, 9))
+        with pytest.raises(AssertionError):
+            Modify(BE(9, 9, 9, 9), 23)
 
 
 
@@ -227,7 +242,7 @@ class Test_parse_changelist(object):
 
 class Test_commit(object):
 
-    def setup_method(self, method):
+    def setup_class(self):
         self.elems = [
             BE(1, 1, 10, 10),
             BE(2, 2, 20, 20),
@@ -237,11 +252,10 @@ class Test_commit(object):
             ['some', 'old'],
             ['changes', 'here'],
         ]
-        self.received_event = None
+        self.received_events = []
 
         def on_change(event):
-            print 'got event', event
-            self.received_event = event
+            self.received_events += [event]
 
         self.eb = EventBus()
         self.eb.register(Model_Changed, on_change)
@@ -266,11 +280,11 @@ class Test_commit(object):
         ]
 
     def test_received_event(self):
-        assert self.received_event is not None
-        assert isinstance(self.received_event, Model_Changed)
+        assert len(self.received_events) == 1
+        assert isinstance(self.received_events[0], Model_Changed)
 
     def test_event_data_contains_fixed_and_ordered_changes(self):
-        assert self.received_event.data == [
+        assert self.received_events[0].data == [
             Remove(BE(3, 3, 30, 30)),
             Remove(BE(2, 2, 20, 20)),
             Modify(BE(1, 1, 10, 10), BE(100, 100, 1000, 1000)),
@@ -282,7 +296,7 @@ class Test_commit(object):
         assert self.changelog == [
             ['some', 'old'],
             ['changes', 'here'],
-            self.received_event.data,
+            self.received_events[0].data,
         ]
 
 

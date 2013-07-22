@@ -97,7 +97,7 @@ class PaintingModel(object):
         # make a changelist with elements to be removed
         old_changes = (Remove(old) for old in self._elems)
         new_changes = (Insert(new) for new in new_elems)
-        self.commit(old_changes + new_changes)
+        commit(old_changes + new_changes, self.changelog, self.eb, self.elems)
 
 
 def commit(changes, changelog, eb, elems):
@@ -115,10 +115,10 @@ def commit(changes, changelog, eb, elems):
 
     elems += [ch.elem for ch in to_insert]
 
-    # changelog items are lists of elements, wrap in additional list and append
-    log_item = [to_remove + to_change + to_insert]
-    changelog += log_item
-    eb.dispatch(Model_Changed(log_item))
+    log = to_remove + to_change + to_insert
+    # changelog items are lists of changes, wrap in additional list
+    changelog += [log]
+    eb.dispatch(Model_Changed(log))
 
 
 def parse(changelist, existing):
