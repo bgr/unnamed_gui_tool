@@ -114,12 +114,12 @@ class Record(tuple):
         # pass them to 'prepare' function if there is one
         if has_prepare:
             prepared = cls.prepare(**gathered)
-            # prepare might return new keys, check if they're valid
-            if any(k not in cls.keys for k in prepared.keys()):
-                raise TypeError("'prepare' must return dict with keys that "
-                                "match {0}.keys".format(cls.__name__))
-            # overwrite values in gathered with prepared
-            gathered.update(prepared)
+            if isinstance(prepared, dict):
+                if any(k not in cls.keys for k in prepared.keys()):
+                    raise TypeError("'prepare' must return dict with keys "
+                                    "that match {0}.keys".format(cls.__name__))
+                # prepared is a valid dictionary
+                gathered.update(prepared)
 
         missing = [k for k in cls.keys if k not in gathered.keys()]
         if missing:

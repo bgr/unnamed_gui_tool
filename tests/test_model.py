@@ -1,43 +1,54 @@
 import pytest
-from my_project.model import Remove, Change, Insert, parse, commit
-from my_project.model import BaseElement as BE
+from my_project.model import (Remove, Modify, Insert, parse, commit,
+                              Model_Changed)
+from my_project.model import _BaseElement as BE
+from hsmpy import EventBus
 
 
-class Test_instantiating_changes(object):
-    def test_Change(self):
-        Change(old=BE(9, 9, 9, 9), new=BE(9, 9, 9, 9))  # works
-        with pytest.raises(ValueError):
-            Change(None, BE(9, 9, 9, 9))
-        with pytest.raises(ValueError):
-            Change(BE(9, 9, 9, 9), 23)
+class Test_changes(object):
+    def test_Modify(self):
+        Modify(elem=BE(9, 9, 9, 9), modified=BE(9, 9, 9, 9))
+
+    def test_Modify_raises_on_invalid_elements(self):
+        with pytest.raises(AssertionError):
+            Modify(None, BE(9, 9, 9, 9))
+        with pytest.raises(AssertionError):
+            Modify(BE(9, 9, 9, 9), 23)
 
     def test_Remove(self):
-        Remove(elem=BE(9, 9, 9, 9))  # works
-        with pytest.raises(ValueError):
+        Remove(elem=BE(9, 9, 9, 9))
+
+    def test_Remove_raises_on_invalid_elements(self):
+        with pytest.raises(AssertionError):
             Remove('x')
-        with pytest.raises(ValueError):
+        with pytest.raises(AssertionError):
             Remove(None)
 
     def test_Insert(self):
-        Insert(elem=BE(9, 9, 9, 9))  # works
-        with pytest.raises(ValueError):
+        Insert(elem=BE(9, 9, 9, 9))
+
+    def test_Insert_raises_on_invalid_elements(self):
+        with pytest.raises(AssertionError):
             Insert('x')
-        with pytest.raises(ValueError):
-            Insert(Remove(9, 9, 9, 9))
+        with pytest.raises(AssertionError):
+            Insert(Remove(BE(9, 9, 9, 9)))
 
 
-class Test_instantiating_elements(object):
+class Test_elements(object):
     def test_BaseElement(self):
-        BE(9, 9, 9, 9)  # works
-        with pytest.raises(ValueError):
-            BE('9', 9, 9, 9)
-            BE(9, 9, 9, 9)
+        BE(9, 9, 9, 9)
 
-    def test_zero_width(self):
+    def test_raises_on_invalid_values(self):
+        with pytest.raises(TypeError):
+            BE(None, 9, 9, 9)
+        with pytest.raises(ValueError):
+            BE(9, 9, 'a', 9)
+
+    def test_raises_on_zero_width(self):
         with pytest.raises(ValueError):
             BE(100, 100, 0, 100)
 
-    def test_zero_height(self):
+    def test_raises_on_zero_height(self):
         with pytest.raises(ValueError):
             BE(100, 100, 100, 0)
 
@@ -77,7 +88,6 @@ class Test_parse_changelist(object):
             Insert(BE(55, 55, 555, 555)),
         ]
 
-
     def test_fixes_new_with_negative_dimensions(self):
         cl = [
             Insert(BE(488, 44, -444, 444)),
@@ -91,75 +101,44 @@ class Test_parse_changelist(object):
             Insert(BE(55, 55, 555, 555)),
         ]
 
-    def test_excludes_fixed_new_with_same_properties_as_existing(self):
-        cl = [
-            Insert(BE(330, 30, -300, 300)),  # existing!
-            Insert(BE(488, 44, -444, 444)),
-            Insert(BE(20, 220, 200, -200)),  # existing!
-            Insert(BE(55, 610, 555, -555)),
-        ]
-        rem, chg, ins = parse(cl, self.elems)
-        assert rem == []
-        assert chg == []
-        assert ins == [
-            Insert(BE(44, 44, 444, 444)),
-            Insert(BE(55, 55, 555, 555)),
-        ]
-
-    def test_excludes_duplicate_fixed_new(self):
-        cl = [
-            Insert(BE(330, 30, -300, 300)),  # existing!
-            Insert(BE(488, 44, -444, 444)),
-            Insert(BE(20, 220, 200, -200)),  # existing!
-            Insert(BE(55, 610, 555, -555)),
-            Insert(BE(488, 488, -444, -444)),  # duplicate in cl!
-            Insert(BE(55, 610, 555, -555)),  # duplicate in cl!
-        ]
-        rem, chg, ins = parse(cl, self.elems)
-        assert rem == []
-        assert chg == []
-        assert ins == [
-            Insert(BE(44, 44, 444, 444)),
-            Insert(BE(55, 55, 555, 555)),
-        ]
-
     def test_allows_changed_elements(self):
         cl = [
-            Change(old=BE(30, 30, 300, 300), new=BE(33, 33, 330, 330)),
-            Change(old=BE(20, 20, 200, 200), new=BE(23, 23, 230, 320)),
+            Modify(BE(30, 30, 300, 300), BE(33, 33, 330, 330)),
+            Modify(BE(20, 20, 200, 200), BE(23, 23, 230, 320)),
         ]
         rem, chg, ins = parse(cl, self.elems)
         assert rem == []
         assert chg == [
-            Change(old=BE(30, 30, 300, 300), new=BE(33, 33, 330, 330)),
-            Change(old=BE(20, 20, 200, 200), new=BE(23, 23, 230, 320)),
+            Modify(BE(30, 30, 300, 300), BE(33, 33, 330, 330)),
+            Modify(BE(20, 20, 200, 200), BE(23, 23, 230, 320)),
         ]
         assert ins == []
 
-    def test_excludes_elements_with_no_actual_changes(self):
-        cl = [
-            Change(old=BE(20, 20, 200, 200), new=BE(23, 23, 230, 320)),
-            Change(old=BE(30, 30, 300, 300), new=BE(30, 30, 300, 300)),
-            Change(old=BE(10, 10, 100, 100), new=BE(10, 10, 111, 100)),
-        ]
-        rem, chg, ins = parse(cl, self.elems)
-        assert rem == []
-        assert chg == [
-            Change(old=BE(20, 20, 200, 200), new=BE(23, 23, 230, 320)),
-            Change(old=BE(10, 10, 100, 100), new=BE(10, 10, 111, 100)),
-        ]
-        assert ins == []
+    # TODO raises error currently, might relax that rule in the future
+    #def test_excludes_elements_with_no_actual_changes(self):
+    #    cl = [
+    #        Modify(BE(20, 20, 200, 200), BE(23, 23, 230, 320)),
+    #        Modify(BE(30, 30, 300, 300), BE(30, 30, 300, 300)),
+    #        Modify(BE(10, 10, 100, 100), BE(10, 10, 111, 100)),
+    #    ]
+    #    rem, chg, ins = parse(cl, self.elems)
+    #    assert rem == []
+    #    assert chg == [
+    #        Modify(BE(20, 20, 200, 200), BE(23, 23, 230, 320)),
+    #        Modify(BE(10, 10, 100, 100), BE(10, 10, 111, 100)),
+    #    ]
+    #    assert ins == []
 
     def test_fixes_changes_with_negative_dimensions(self):
         cl = [
-            Change(old=BE(20, 20, 200, 200), new=BE(200, 20, -100, 20)),
-            Change(old=BE(10, 10, 100, 100), new=BE(-10, 10, -90, 100)),
+            Modify(BE(20, 20, 200, 200), BE(200, 20, -100, 20)),
+            Modify(BE(10, 10, 100, 100), BE(-10, 10, -90, 100)),
         ]
         rem, chg, ins = parse(cl, self.elems)
         assert rem == []
         assert chg == [
-            Change(old=BE(20, 20, 200, 200), new=BE(100, 20, 100, 20)),
-            Change(old=BE(10, 10, 100, 100), new=BE(-100, 10, 90, 100)),
+            Modify(BE(20, 20, 200, 200), BE(100, 20, 100, 20)),
+            Modify(BE(10, 10, 100, 100), BE(-100, 10, 90, 100)),
         ]
         assert ins == []
 
@@ -181,7 +160,7 @@ class Test_parse_changelist(object):
         cl = [
             Remove(BE(30, 30, 300, 300)),
             Insert(BE(10, 5, -5, 5)),  # fix
-            Change(BE(10, 10, 100, 100), BE(100, 1100, 1000, -1000)),  # fix
+            Modify(BE(10, 10, 100, 100), BE(100, 1100, 1000, -1000)),  # fix
             Remove(BE(20, 20, 200, 200)),
             Insert(BE(4, 4, 4, 4)),
         ]
@@ -191,7 +170,7 @@ class Test_parse_changelist(object):
             Remove(BE(20, 20, 200, 200)),
         ]
         assert chg == [
-            Change(BE(10, 10, 100, 100), BE(100, 100, 1000, 1000))
+            Modify(BE(10, 10, 100, 100), BE(100, 100, 1000, 1000))
         ]
         assert ins == [
             Insert(BE(5, 5, 5, 5)),
@@ -200,60 +179,50 @@ class Test_parse_changelist(object):
 
 
     def test_raises_on_invalid_changelist_elements(self):
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError) as err:
             parse([Insert(BE(9, 9, 9, 9)), None], self.elems)
-        with pytest.raises(ValueError):
+        assert 'Invalid change' in err.value.message
+        with pytest.raises(ValueError) as err:
             parse([Insert(BE(9, 9, 9, 9)), 2], self.elems)
+        assert 'Invalid change' in err.value.message
 
-
-    def test_raises_when_inserting_same_properties_as_existing(self):
-        with pytest.raises(ValueError):
+    def test_raises_when_inserting_same_as_existing(self):
+        with pytest.raises(ValueError) as err:
             parse([Insert(BE(30, 30, 300, 300))], self.elems)
+        assert 'already present' in err.value.message
+
+    def test_raises_when_inserting_same_as_existing_with_fixing(self):
+        with pytest.raises(ValueError) as err:
+            parse([Insert(BE(30, 330, 300, -300))], self.elems)
+        assert 'already present' in err.value.message
 
     def test_raises_when_changing_old_not_in_existing(self):
-        with pytest.raises(ValueError):
-            parse([Change(BE(9, 9, 9, 9), BE(1, 1, 10, 10))], self.elems)
+        with pytest.raises(ValueError) as err:
+            parse([Modify(BE(9, 9, 9, 9), BE(1, 1, 10, 10))], self.elems)
+        assert "Changing element that's not in the model" in err.value.message
 
-    def test_raises_when_deleting_old_not_in_existing(self):
-        with pytest.raises(ValueError):
-            parse([Change(BE(9, 9, 9, 9), None)], self.elems)
+    def test_raises_when_removing_old_not_in_existing(self):
+        with pytest.raises(ValueError) as err:
+            parse([Remove(BE(9, 9, 9, 9))], self.elems)
+        assert "Removing element that's not in the model" in err.value.message
 
-    def test_raises_when_both_old_and_new_are_None(self):
-        with pytest.raises(ValueError):
-            parse([Change(None, None)], self.elems)
+    def test_raises_on_duplicate_insertions(self):
+        cl = [
+            Insert(BE(55, 610, 555, -555)),
+            Insert(BE(610, 55, -555, 555)),
+        ]
+        with pytest.raises(ValueError) as err:
+            parse(cl, self.elems)
+        assert 'Inserting same element' in err.value.message
 
-    def test_raises_when_deleting_then_adding_same_elem(self):
+    def test_raises_on_duplicate_removals(self):
         cl = [
             Remove(BE(10, 10, 100, 100)),
-            Insert(BE(10, 10, 100, 100)),
-        ]
-        with pytest.raises(ValueError):
-            parse(cl, self.elems)
-
-    def test_raises_when_adding_then_deleting_same_elem(self):
-        cl = [
-            Insert(BE(10, 10, 100, 100)),
             Remove(BE(10, 10, 100, 100)),
         ]
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError) as err:
             parse(cl, self.elems)
-
-    def test_raises_when_deleting_then_adding_same_elem_with_fixing(self):
-        cl = [
-            Remove(BE(10, 10, 100, 100)),
-            Insert(BE(10, 110, 100, -100)),
-        ]
-        with pytest.raises(ValueError):
-            parse(cl, self.elems)
-
-    def test_raises_when_adding_then_deleting_same_elem_with_fixing(self):
-        cl = [
-            Insert(BE(10, 110, 100, -100)),
-            Remove(BE(10, 10, 100, 100)),
-        ]
-        with pytest.raises(ValueError):
-            parse(cl, self.elems)
-
+        assert 'Removing same element' in err.value.message
 
 
 class Test_commit(object):
@@ -264,42 +233,58 @@ class Test_commit(object):
             BE(2, 2, 20, 20),
             BE(3, 3, 30, 30),
         ]
+        self.changelog = [
+            ['some', 'old'],
+            ['changes', 'here'],
+        ]
+        self.received_event = None
 
-    def test_validates_before_committing(self):
+        def on_change(event):
+            print 'got event', event
+            self.received_event = event
+
+        self.eb = EventBus()
+        self.eb.register(Model_Changed, on_change)
+
+
+    def test_commit(self):
         cl = [
-            Change(old=BE(3, 3, 30, 30), new=BE(33, 33, 33, 33)),  # change
-            Change(old=BE(3, 3, 30, 30), new=BE(33, 33, 33, 33)),  # duplicate
-
-            Change(old=None, new=BE(2, 2, 20, 20)),  # existing - exclude
-            Change(old=None, new=BE(33, 3, -30, 30)),  # existing - exclude
-
-            Change(old=None, new=BE(488, 44, -444, 444)),  # fix dimensions
-            Change(old=None, new=BE(55, 55, 555, 555)),  # add
-            Change(old=None, new=BE(488, 488, -444, -444)),  # duplicate
-
-            Change(old=BE(1, 1, 10, 10), new=BE(1, 1, 10, 10)),  # no change
-            Change(old=BE(4, 4, 40, 40), new=None),  # remove
+            Remove(BE(3, 3, 30, 30)),
+            Insert(BE(10, 5, -5, 5)),  # fix
+            Modify(BE(1, 1, 10, 10), BE(100, 1100, 1000, -1000)),  # fix
+            Remove(BE(2, 2, 20, 20)),
+            Insert(BE(4, 4, 4, 4)),
         ]
-        parsed = parse(cl, self.elems)
-        assert parsed == [
-            Change(old=BE(3, 3, 30, 30), new=BE(33, 33, 33, 33)),
-            Change(old=None, new=BE(44, 44, 444, 444)),
-            Change(old=None, new=BE(55, 55, 555, 555)),
-            Change(old=BE(4, 4, 40, 40), new=None),
+
+        commit(cl, self.changelog, self.eb, self.elems)
+
+    def test_elems_list_updated(self):
+        assert self.elems == [
+            BE(100, 100, 1000, 1000),
+            BE(5, 5, 5, 5),
+            BE(4, 4, 4, 4),
         ]
-        commit
 
-    def test_informs_listeners_about_new_elements(self):
-        pass
+    def test_received_event(self):
+        assert self.received_event is not None
+        assert isinstance(self.received_event, Model_Changed)
 
-    def test_informs_listeners_about_changed_elements(self):
-        pass
+    def test_event_data_contains_fixed_and_ordered_changes(self):
+        assert self.received_event.data == [
+            Remove(BE(3, 3, 30, 30)),
+            Remove(BE(2, 2, 20, 20)),
+            Modify(BE(1, 1, 10, 10), BE(100, 100, 1000, 1000)),
+            Insert(BE(5, 5, 5, 5)),
+            Insert(BE(4, 4, 4, 4)),
+        ]
 
-    def test_informs_listeners_about_deleted_elements(self):
-        pass
+    def test_changes_appended_to_changelog(self):
+        assert self.changelog == [
+            ['some', 'old'],
+            ['changes', 'here'],
+            self.received_event.data,
+        ]
 
-    def test_informs_listeners_when_assigning_new_elements(self):
-        pass
 
     def test_doesnt_inform_when_empty_changelist(self):
         pass
