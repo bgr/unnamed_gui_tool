@@ -1,9 +1,8 @@
 from javax.swing import JFrame, JButton, BoxLayout
-from util import invokeLater
+from javautils import invokeLater
 import canvas
-from model import PaintingModel, Rectangle, Circle
+from model import CanvasModel, Rectangle, Ellipse
 from hsmpy import HSM, EventBus
-from events import Commit_To_Model
 
 
 class PaintFrame(JFrame):
@@ -32,7 +31,7 @@ class PaintFrame(JFrame):
 @invokeLater
 def run():
     eventbus = EventBus()
-    model = PaintingModel(eventbus)
-    model.elems = [Circle(20, 30, 40), Rectangle(30, 40, 10, 20)]
+    model = CanvasModel(eventbus)
+    model.elems = [Ellipse(20, 30, 40, 50), Rectangle(30, 40, 10, 20)]
     PaintFrame(model, eventbus).locationRelativeTo = None
     PaintFrame(model, eventbus)
