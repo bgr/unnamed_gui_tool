@@ -1,6 +1,6 @@
 import pytest
-from my_project.model import (Remove, Modify, Insert, parse, commit,
-                              Model_Changed)
+from my_project.model import (Remove, Modify, Insert, _parse, _commit,
+                              Model_Changed, CanvasModel)
 from my_project.model import _BaseElement as BE
 from hsmpy import EventBus
 
@@ -95,7 +95,7 @@ class Test_parse_changelist(object):
             Insert(elem=BE(44, 44, 444, 444)),
             Insert(BE(55, 55, 555, 555)),
         ]
-        rem, chg, ins = parse(cl, self.elems)
+        rem, chg, ins = _parse(cl, self.elems)
         assert rem == []
         assert chg == []
         assert ins == [
@@ -108,7 +108,7 @@ class Test_parse_changelist(object):
             Insert(BE(488, 44, -444, 444)),
             Insert(BE(55, 610, 555, -555)),
         ]
-        rem, chg, ins = parse(cl, self.elems)
+        rem, chg, ins = _parse(cl, self.elems)
         assert rem == []
         assert chg == []
         assert ins == [
@@ -121,7 +121,7 @@ class Test_parse_changelist(object):
             Modify(BE(30, 30, 300, 300), BE(33, 33, 330, 330)),
             Modify(BE(20, 20, 200, 200), BE(23, 23, 230, 320)),
         ]
-        rem, chg, ins = parse(cl, self.elems)
+        rem, chg, ins = _parse(cl, self.elems)
         assert rem == []
         assert chg == [
             Modify(BE(30, 30, 300, 300), BE(33, 33, 330, 330)),
@@ -136,7 +136,7 @@ class Test_parse_changelist(object):
     #        Modify(BE(30, 30, 300, 300), BE(30, 30, 300, 300)),
     #        Modify(BE(10, 10, 100, 100), BE(10, 10, 111, 100)),
     #    ]
-    #    rem, chg, ins = parse(cl, self.elems)
+    #    rem, chg, ins = _parse(cl, self.elems)
     #    assert rem == []
     #    assert chg == [
     #        Modify(BE(20, 20, 200, 200), BE(23, 23, 230, 320)),
@@ -149,7 +149,7 @@ class Test_parse_changelist(object):
             Modify(BE(20, 20, 200, 200), BE(200, 20, -100, 20)),
             Modify(BE(10, 10, 100, 100), BE(-10, 10, -90, 100)),
         ]
-        rem, chg, ins = parse(cl, self.elems)
+        rem, chg, ins = _parse(cl, self.elems)
         assert rem == []
         assert chg == [
             Modify(BE(20, 20, 200, 200), BE(100, 20, 100, 20)),
@@ -162,7 +162,7 @@ class Test_parse_changelist(object):
             Remove(elem=BE(30, 30, 300, 300)),
             Remove(BE(20, 20, 200, 200)),
         ]
-        rem, chg, ins = parse(cl, self.elems)
+        rem, chg, ins = _parse(cl, self.elems)
         assert rem == [
             Remove(BE(30, 30, 300, 300)),
             Remove(BE(20, 20, 200, 200)),
@@ -179,7 +179,7 @@ class Test_parse_changelist(object):
             Remove(BE(20, 20, 200, 200)),
             Insert(BE(4, 4, 4, 4)),
         ]
-        rem, chg, ins = parse(cl, self.elems)
+        rem, chg, ins = _parse(cl, self.elems)
         assert rem == [
             Remove(BE(30, 30, 300, 300)),
             Remove(BE(20, 20, 200, 200)),
@@ -195,30 +195,30 @@ class Test_parse_changelist(object):
 
     def test_raises_on_invalid_changelist_elements(self):
         with pytest.raises(ValueError) as err:
-            parse([Insert(BE(9, 9, 9, 9)), None], self.elems)
+            _parse([Insert(BE(9, 9, 9, 9)), None], self.elems)
         assert 'Invalid change' in err.value.message
         with pytest.raises(ValueError) as err:
-            parse([Insert(BE(9, 9, 9, 9)), 2], self.elems)
+            _parse([Insert(BE(9, 9, 9, 9)), 2], self.elems)
         assert 'Invalid change' in err.value.message
 
     def test_raises_when_inserting_same_as_existing(self):
         with pytest.raises(ValueError) as err:
-            parse([Insert(BE(30, 30, 300, 300))], self.elems)
+            _parse([Insert(BE(30, 30, 300, 300))], self.elems)
         assert 'already present' in err.value.message
 
     def test_raises_when_inserting_same_as_existing_with_fixing(self):
         with pytest.raises(ValueError) as err:
-            parse([Insert(BE(30, 330, 300, -300))], self.elems)
+            _parse([Insert(BE(30, 330, 300, -300))], self.elems)
         assert 'already present' in err.value.message
 
     def test_raises_when_changing_old_not_in_existing(self):
         with pytest.raises(ValueError) as err:
-            parse([Modify(BE(9, 9, 9, 9), BE(1, 1, 10, 10))], self.elems)
+            _parse([Modify(BE(9, 9, 9, 9), BE(1, 1, 10, 10))], self.elems)
         assert "Changing element that's not in the model" in err.value.message
 
     def test_raises_when_removing_old_not_in_existing(self):
         with pytest.raises(ValueError) as err:
-            parse([Remove(BE(9, 9, 9, 9))], self.elems)
+            _parse([Remove(BE(9, 9, 9, 9))], self.elems)
         assert "Removing element that's not in the model" in err.value.message
 
     def test_raises_on_duplicate_insertions(self):
@@ -227,7 +227,7 @@ class Test_parse_changelist(object):
             Insert(BE(610, 55, -555, 555)),
         ]
         with pytest.raises(ValueError) as err:
-            parse(cl, self.elems)
+            _parse(cl, self.elems)
         assert 'Inserting same element' in err.value.message
 
     def test_raises_on_duplicate_removals(self):
@@ -236,7 +236,7 @@ class Test_parse_changelist(object):
             Remove(BE(10, 10, 100, 100)),
         ]
         with pytest.raises(ValueError) as err:
-            parse(cl, self.elems)
+            _parse(cl, self.elems)
         assert 'Removing same element' in err.value.message
 
 
@@ -252,9 +252,11 @@ class Test_commit(object):
             ['some', 'old'],
             ['changes', 'here'],
         ]
+        self.counter = 0
         self.received_events = []
 
         def on_change(event):
+            self.counter += 1
             self.received_events += [event]
 
         self.eb = EventBus()
@@ -270,7 +272,7 @@ class Test_commit(object):
             Insert(BE(4, 4, 4, 4)),
         ]
 
-        commit(cl, self.changelog, self.eb, self.elems)
+        _commit(cl, self.changelog, self.eb, self.elems)
 
     def test_elems_list_updated(self):
         assert self.elems == [
@@ -280,6 +282,7 @@ class Test_commit(object):
         ]
 
     def test_received_event(self):
+        assert self.counter == 1
         assert len(self.received_events) == 1
         assert isinstance(self.received_events[0], Model_Changed)
 
@@ -299,24 +302,145 @@ class Test_commit(object):
             self.received_events[0].data,
         ]
 
-
     def test_doesnt_inform_when_empty_changelist(self):
-        pass
+        _commit([], self.changelog, self.eb, self.elems)
+        # everything should be the same
+        assert self.elems == [
+            BE(100, 100, 1000, 1000),
+            BE(5, 5, 5, 5),
+            BE(4, 4, 4, 4),
+        ]
+        assert self.counter == 1
+        assert len(self.received_events) == 1
+        assert isinstance(self.received_events[0], Model_Changed)
+        assert self.received_events[0].data == [
+            Remove(BE(3, 3, 30, 30)),
+            Remove(BE(2, 2, 20, 20)),
+            Modify(BE(1, 1, 10, 10), BE(100, 100, 1000, 1000)),
+            Insert(BE(5, 5, 5, 5)),
+            Insert(BE(4, 4, 4, 4)),
+        ]
+        assert self.changelog == [
+            ['some', 'old'],
+            ['changes', 'here'],
+            self.received_events[0].data,
+        ]
 
 
-class Test_tampering(object):
+class Test_CanvasModel(object):
     def setup_class(self):
-        self.initial = []
+        self.initial_elements = [
+            BE(1, 1, 10, 10),
+            BE(2, 2, 20, 20),
+            BE(3, 3, 30, 30),
+        ]
+        self.counter = 0
+        self.received_events = []
 
-    def test_cant_modify_elems(self):
-        pass
+        def on_change(event):
+            self.counter += 1
+            self.received_events += [event]
 
-    def test_cant_change_changelist_via_event(self):
-        # submit a changelist then get informed via eventbus
-        # modify received changelist and assert that model is untouched
-        pass
+        self.changelist = [  # used for commit
+            Insert(BE(4, 4, 40, 40)),
+            Modify(BE(3, 3, 30, 30), BE(30, 30, 300, 300)),
+            Remove(BE(2, 2, 20, 20)),
+        ]
 
-    def test_cant_change_changelist_after_submitting(self):
-        # submit a changelist as method argument, then
-        # modify the argument, assert that it doesn't reflect in model
-        pass
+        self.eb = EventBus()
+        self.model = CanvasModel(self.eb)
+        self.eb.register(Model_Changed, on_change)
+
+    def test_setting_elems_updates_elems(self):
+        to_give = self.initial_elements[:]  # copy
+        self.model.elems = to_give
+        assert to_give == self.initial_elements  # model didn't change given
+        assert self.model.elems == self.initial_elements
+        assert self.model._elems == self.initial_elements
+
+    def test_setting_elems_updates_changelog(self):
+        assert self.model._changelog == [
+            [
+                Insert(BE(1, 1, 10, 10)),
+                Insert(BE(2, 2, 20, 20)),
+                Insert(BE(3, 3, 30, 30)),
+            ],
+        ]
+
+    def test_setting_elems_informs_listeners(self):
+        assert self.counter == 1
+        assert len(self.received_events) == 1
+        assert self.received_events[0].data == self.model._changelog[0]
+
+    def test_cant_modify_elems_through_getter(self):
+        self.model.elems[1] = 'abc'
+        self.model.elems.pop(0)
+        assert self.model.elems == self.initial_elements
+
+    def test_cant_inject_changes_to_changelog_through_event(self):
+        evt = self.received_events[0]
+        backup = evt.data[0]
+        evt.data[0] == 'abc'
+        assert self.model._changelog == [
+            [
+                Insert(BE(1, 1, 10, 10)),
+                Insert(BE(2, 2, 20, 20)),
+                Insert(BE(3, 3, 30, 30)),
+            ],
+        ]
+        evt.data[0] = backup
+
+    def test_commit(self):
+        self.model.commit(self.changelist)
+
+    def test_commit_informs_listeners(self):
+        assert self.counter == 2
+        assert len(self.received_events) == 2
+        assert self.received_events[1].data == [
+            Remove(BE(2, 2, 20, 20)),
+            Modify(BE(3, 3, 30, 30), BE(30, 30, 300, 300)),
+            Insert(BE(4, 4, 40, 40)),
+        ]
+
+    def test_commit_updates_elems(self):
+        assert self.model._elems == [
+            BE(1, 1, 10, 10),
+            BE(30, 30, 300, 300),
+            BE(4, 4, 40, 40),
+        ]
+        assert self.model.elems == self.model._elems
+
+    def test_commit_updates_changelog(self):
+        assert self.model._changelog == [
+            [
+                Insert(BE(1, 1, 10, 10)),
+                Insert(BE(2, 2, 20, 20)),
+                Insert(BE(3, 3, 30, 30)),
+            ],
+            [
+                Remove(BE(2, 2, 20, 20)),
+                Modify(BE(3, 3, 30, 30), BE(30, 30, 300, 300)),
+                Insert(BE(4, 4, 40, 40)),
+            ]
+        ]
+
+    def test_cant_inject_changes_to_changelog_through_commit_argument(self):
+        self.changelist[2] = 'abc'
+        self.changelist.pop(0)
+        assert self.received_events[1].data == [
+            Remove(BE(2, 2, 20, 20)),
+            Modify(BE(3, 3, 30, 30), BE(30, 30, 300, 300)),
+            Insert(BE(4, 4, 40, 40)),
+        ]
+        assert self.model._changelog == [
+            [
+                Insert(BE(1, 1, 10, 10)),
+                Insert(BE(2, 2, 20, 20)),
+                Insert(BE(3, 3, 30, 30)),
+            ],
+            [
+                Remove(BE(2, 2, 20, 20)),
+                Modify(BE(3, 3, 30, 30), BE(30, 30, 300, 300)),
+                Insert(BE(4, 4, 40, 40)),
+            ]
+        ]

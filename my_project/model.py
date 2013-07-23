@@ -66,13 +66,13 @@ class Polyline(_BaseElement):
     keys = ('segments',)
 
 
-class PaintingModel(object):
+class CanvasModel(object):
     def __init__(self, eventbus):
         self._elems = []
-        self.changelog
-        self.eb = eventbus
+        self._changelog = []
+        self._eb = eventbus
         # call 'commit' and pass event.data as changelist
-        self.eb.register(Commit_To_Model, lambda evt: self.commit(evt.data))
+        self._eb.register(Commit_To_Model, lambda evt: self.commit(evt.data))
 
 
     @property
@@ -95,16 +95,23 @@ class PaintingModel(object):
             new elements and inform listeners with it.
         """
         # make a changelist with elements to be removed
-        old_changes = (Remove(old) for old in self._elems)
-        new_changes = (Insert(new) for new in new_elems)
-        commit(old_changes + new_changes, self.changelog, self.eb, self.elems)
+        old_changes = [Remove(old) for old in self._elems]
+        new_changes = [Insert(new) for new in new_elems]
+        self.commit(old_changes + new_changes)
+
+    def commit(self, changes):
+        _commit(changes, self._changelog, self._eb, self._elems)
 
 
-def commit(changes, changelog, eb, elems):
+
+def _commit(changes, changelog, eb, elems):
     """Performs the changes to model's elements and informs listeners."""
     _log.info('Model got changelist {0}'.format(changes))
 
-    parsed = parse(changes, elems)
+    if not changes:  # ignore empty changelist
+        return
+
+    parsed = _parse(changes, elems)
     to_remove, to_change, to_insert = parsed
 
     for ch in to_remove:
@@ -121,7 +128,7 @@ def commit(changes, changelog, eb, elems):
     eb.dispatch(Model_Changed(log))
 
 
-def parse(changelist, existing):
+def _parse(changelist, existing):
     """
         Validates changes in changelist and returns tuple:
             (validated_changelist, elems_to_remove, changed_elems, new_elems)
@@ -170,19 +177,3 @@ def parse(changelist, existing):
 
     # everything ok
     return (to_remove, to_modify, to_insert)
-
-
-#def fix(elem):
-    #if elem.width == 0 or elem.height == 0:
-        #raise ValueError("Element with no dimensions: {0}".format(elem))
-
-    #x, y, w, h = elem
-    #if elem.width < 0:
-        #x -= -elem.width
-        #w = -elem.width
-    #if elem.height < 0:
-        #y -= -elem.height
-        #h = -elem.height
-    #new_elem = elem._make((x, y, w, h))
-    #_log.info("Model fixed element {0} into {1}".format(elem, new_elem))
-    #return new_elem

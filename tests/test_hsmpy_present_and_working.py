@@ -1,5 +1,5 @@
 import hsmpy
-from hsmpy import HSM, State, CompositeState, Initial, Event, EventBus
+from hsmpy import HSM, State, Initial, Event, EventBus
 from hsmpy import Transition as T
 
 
@@ -17,7 +17,7 @@ class Test_hsmpy(object):
             self.worked = 'yes'
 
         self.states = {
-            'top': CompositeState({
+            'top': State({
                 'left': State(),
                 'right': State(),
             })
@@ -39,4 +39,5 @@ class Test_hsmpy(object):
     def test_seems_fine(self):
         self.eb.dispatch(Step())
         assert self.worked == 'yes'
-        assert self.hsm._current_state.name == 'right'
+        assert len(self.hsm.current_state_set) == 1
+        assert list(self.hsm.current_state_set)[0].name == 'right'
