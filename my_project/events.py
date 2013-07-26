@@ -12,10 +12,6 @@ class Mouse_Up(Mouse_Event): pass
 class Mouse_Move(Mouse_Event): pass
 
 class Tool_Changed(Event): pass
-class Commit_To_Model(Event): pass
 
+class Commit_To_Model(Event): pass
 class Model_Changed(Event): pass
-class Model_Addition(Model_Changed): pass
-class Model_Selection(Model_Changed): pass
-class Model_Deletion(Model_Changed): pass
-class Model_Cleared(Model_Changed): pass

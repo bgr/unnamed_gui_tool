@@ -39,8 +39,6 @@ class _BaseElement(Record):
     @classmethod
     def prepare(cls, x, y, width, height):
         x, y, width, height = map(float, [x, y, width, height])
-        if width == 0 or height == 0:
-            raise ValueError("Dimensions cannot be 0")
         if width < 0:
             x -= -width
             width = -width
@@ -150,30 +148,33 @@ def _parse(changelist, existing):
     # now validate element values
 
     elems_old = [m.elem for m in to_modify]
-    elems_new = [m.modified for m in to_modify]
-    elems_rmd = [r.elem for r in to_remove]
+    elems_mod = [m.modified for m in to_modify]
+    elems_rmv = [r.elem for r in to_remove]
     elems_ins = [i.elem for i in to_insert]
     if not all(el in existing for el in elems_old):
         raise ValueError("Changing element that's not in the model")
-    if not all(el in existing for el in elems_rmd):
+    if not all(el in existing for el in elems_rmv):
         raise ValueError("Removing element that's not in the model")
-    if any(el in existing for el in elems_new):
+    if any(el in existing for el in elems_mod):
         raise ValueError("Changing into element that's already in model")
     if any(el in existing for el in elems_ins):
         raise ValueError("Inserting element already present in the model")
 
-    if duplicates(elems_rmd):
+    if duplicates(elems_rmv):
         raise ValueError("Removing same element multiple times")
-    if duplicates(elems_old + elems_new):
+    if duplicates(elems_old + elems_mod):
         raise ValueError("Modifying same element multiple times")
     if duplicates(elems_ins):
         raise ValueError("Inserting same element multiple times")
-    if duplicates(elems_rmd + elems_ins):
+    if duplicates(elems_rmv + elems_ins):
         raise ValueError("Removing and inserting same element")
-    if duplicates(elems_rmd + elems_old + elems_new):
+    if duplicates(elems_rmv + elems_old + elems_mod):
         raise ValueError("Removing and changing same element")
-    if duplicates(elems_ins + elems_old + elems_new):
+    if duplicates(elems_ins + elems_old + elems_mod):
         raise ValueError("Changing and inserting identical elements")
+
+    if any(el.width == 0 and el.height == 0 for el in elems_mod + elems_ins):
+        raise ValueError("Elements with 0 dimensions")
 
     # everything ok
     return (to_remove, to_modify, to_insert)

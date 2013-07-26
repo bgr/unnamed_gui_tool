@@ -1,4 +1,4 @@
-import hsmpy
+import hsmpy  # check that import works
 from hsmpy import HSM, State, Initial, Event, EventBus
 from hsmpy import Transition as T
 
@@ -39,5 +39,4 @@ class Test_hsmpy(object):
     def test_seems_fine(self):
         self.eb.dispatch(Step())
         assert self.worked == 'yes'
-        assert len(self.hsm.current_state_set) == 1
-        assert list(self.hsm.current_state_set)[0].name == 'right'
+        assert len(self.hsm.current_state_set) == 2

@@ -19,14 +19,6 @@ class Test_elements(object):
         with pytest.raises(ValueError):
             BE(9, 9, 'a', 9)
 
-    def test_raises_on_zero_width(self):
-        with pytest.raises(ValueError):
-            BE(100, 100, 0, 100)
-
-    def test_raises_on_zero_height(self):
-        with pytest.raises(ValueError):
-            BE(100, 100, 100, 0)
-
     def test_fix_negative_width(self):
         el = BE(20, 30, -100, 40)
         assert el == BE(-80, 30, 100, 40)
@@ -238,6 +230,20 @@ class Test_parse_changelist(object):
         with pytest.raises(ValueError) as err:
             _parse(cl, self.elems)
         assert 'Removing same element' in err.value.message
+
+    def test_raises_on_zero_dimensions(self):
+        _parse([Insert(BE(1, 1, 0, 1))], self.elems)  # allowed one to be 0
+        _parse([Insert(BE(1, 1, 1, 0))], self.elems)
+        _parse([Modify(BE(10, 10, 100, 100), BE(10, 10, 0, 1))], self.elems)
+
+        with pytest.raises(ValueError) as err:
+            _parse([Insert(BE(1, 1, 0, 0))], self.elems)
+        assert 'dimensions' in err.value.message
+
+        with pytest.raises(ValueError) as err:
+            _parse([Modify(BE(10, 10, 100, 100), BE(10, 10, 0, 0))],
+                   self.elems)
+        assert 'dimensions' in err.value.message
 
 
 class Test_commit(object):

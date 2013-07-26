@@ -1,29 +1,18 @@
 from javax.swing import JPanel
 from java.awt import Color
-from model import Rectangle, Ellipse
-from hsmpy import State, Initial
+from hsmpy import Initial
 from hsmpy import Transition as T
 from hsmpy import InternalTransition as Internal
-import logging
 
+from model import Rectangle, Ellipse
+from app import S
 from events import (Mouse_Down, Mouse_Up, Mouse_Move, Tool_Changed,
                     Commit_To_Model, Model_Changed)
 from model import Modify, Insert, Remove
 
 
+import logging
 _log = logging.getLogger(__name__)
-
-
-class LoggingState(State):
-    def enter(self, evt, hsm):
-        _log.debug('entering {0}'.format(self.name))
-
-    def exit(self, evt, hsm):
-        _log.debug('exiting {0}'.format(self.name))
-
-
-# alias class so that it can easily be switched
-S = LoggingState
 
 
 class CanvasView(JPanel):
@@ -35,6 +24,7 @@ class CanvasView(JPanel):
         self._elems = []
 
         self._elems = []
+        self._draw_once_elems = []
         self._selected = set([])
         self.drawing_handlers = drawing_handlers
         self._background_color = Color.WHITE
@@ -59,6 +49,10 @@ class CanvasView(JPanel):
         if repaint:
             self.repaint()
 
+    def draw_once(self, elems):
+        self._draw_once_elems = elems
+        self.repaint()
+
     @property
     def selection(self):
         return self._selected
@@ -73,7 +67,7 @@ class CanvasView(JPanel):
         g.color = self.background_color
         g.fillRect(0, 0, self.width, self.height)
         g.color = self._stroke_color
-        for el in self._elems:
+        for el in self._elems + self._draw_once_elems:
             self.drawing_handlers[el.__class__](el, g)
 
 
@@ -86,7 +80,11 @@ def set_up(evt, hsm):
 
 
 def remember_tool(evt, hsm):
-    hsm.data.canvas_tool = evt.data
+    tool_map = {
+        'rectangle': Rectangle,
+        'ellipse': Ellipse,
+    }
+    hsm.data.canvas_tool = tool_map[evt.data]
     _log.info('HSM remembered selected tool {0}'.format(hsm.data.canvas_tool))
 
 
@@ -104,31 +102,26 @@ def tool_is(element):
     return lambda _, hsm: hsm.data.canvas_tool == element
 
 
-# drawing
+# drawin/
 
-def remember_coordinates(evt, hsm):
+def prepare_for_drawing(evt, hsm):
     hsm.data.canvas_start_x = evt.x
     hsm.data.canvas_start_y = evt.y
-
-
-def make_temp_rectangle(evt, hsm):
-    hsm.data.canvas_elem_type = Rectangle
-
-
-def make_temp_ellipse(evt, hsm):
-    hsm.data.canvas_elem_type = Ellipse
+    if hsm.data.canvas_tool not in [Ellipse, Rectangle]:
+        raise ValueError("Invalid tool "
+                         "selected {0}".format(hsm.data.canvas_tool))
+    # remember elem type since tool could change during drawing
+    hsm.data.canvas_elem_type = hsm.data.canvas_tool
 
 
 # drawing - interaction with CanvasView
 
 def draw_rectangle(el, g):
-    #_log.info("Draw rectangle {0}".format(el))
     g.drawRect(*map(int, el))
 
 
 def draw_ellipse(el, g):
-    #_log.info("Draw ellipse {0}".format(el))
-    g.drawOval(el.x, el.y, el.width, el.height)
+    g.drawOval(*map(int, el))
 
 
 drawing_handlers = {
@@ -154,12 +147,27 @@ def draw_changes(changes, view):
     view.repaint()
 
 
+def draw_temp_elem(evt, hsm, view):
+    x = hsm.data.canvas_start_x
+    y = hsm.data.canvas_start_y
+    width = evt.x - x
+    height = evt.y - y
+
+    cls = hsm.data.canvas_elem_type
+    hsm.data.canvas_temp_elem = cls(x, y, width, height)
+    view.draw_once([hsm.data.canvas_temp_elem])
+
+
 # interaction with model
 
 def commit_to_model(evt, hsm):
-    _log.debug("committing to model {0}".format(hsm.data.canvas_temp_elem))
+    el = hsm.data.canvas_temp_elem
+    if el.width == 0 and el.height == 0:
+        _log.info("not commiting {0} (0 dimensions)".format(el))
+        return
+    _log.info("committing to model {0}".format(el))
     # dispatch event to add to model
-    hsm.eb.dispatch(Commit_To_Model( [Insert(hsm.data.canvas_temp_elem)] ))
+    hsm.eb.dispatch(Commit_To_Model( [Insert(el)] ))
 
 
 
@@ -178,50 +186,36 @@ def make(eventbus):
     states = {
         'top': S(on_enter=set_up, states={
             'idle': S(on_enter=reset_temp_elem),
-            'drawing': S(on_enter=remember_coordinates, states={
-                'drawing_rectangle': S(on_enter=make_temp_rectangle),
-                'drawing_ellipse': S(on_enter=make_temp_ellipse),
-            })
+            'drawing': S(on_enter=prepare_for_drawing, states={
+                'wait_for_drag_element': S(),
+                'dragging_element': S(),
+            }),
         })
     }
 
-    def mock_model_changes(evt, hsm):
-        x = hsm.data.canvas_start_x
-        y = hsm.data.canvas_start_y
-        width = evt.x - x
-        height = evt.y - y
-        if width == 0 or height == 0:
-            return
-
-        cls = hsm.data.canvas_elem_type
-        new = cls(x, y, width, height)
-        if hsm.data.canvas_temp_elem:
-            mock_change = Modify(hsm.data.canvas_temp_elem, new)
-        else:
-            mock_change = Insert(new)
-        hsm.data.canvas_temp_elem = new
-        draw_changes([mock_change], view)
+    act_draw_changes = lambda evt, hsm: draw_changes(evt.data, view)
+    act_draw_temp_elem = lambda evt, hsm: draw_temp_elem(evt, hsm, view)
 
     trans = {
         'top': {
             Initial: T('idle'),
             Tool_Changed: Internal(action=remember_tool),
-            Model_Changed: Internal(action=lambda e, h: draw_changes(e.data,
-                                                                     view)),
+            Model_Changed: Internal(action=act_draw_changes),
         },
         'idle': {
-            Canvas_Down: T('drawing_rectangle'),
+            Canvas_Down: T('drawing'),
         },
         'drawing': {
-            Initial: T('drawing_ellipse'),
-            Canvas_Up: T('idle', action=commit_to_model),
+            Initial: T('wait_for_drag_element'),
         },
-        'drawing_rectangle': {
-            Canvas_Move: Internal(action=mock_model_changes),
-        },
-        'drawing_ellipse': {
-            Canvas_Move: Internal(action=mock_model_changes),
-        },
+            'wait_for_drag_element': {
+                Canvas_Move: T('dragging_element', action=act_draw_temp_elem),
+                Canvas_Up: T('idle'),  # don't commit 0 width & height
+            },
+            'dragging_element': {
+                Canvas_Move: Internal(action=act_draw_temp_elem),
+                Canvas_Up: T('idle', action=commit_to_model),
+            },
     }
 
     return (view, states, trans)
