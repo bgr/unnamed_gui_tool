@@ -6,9 +6,8 @@ import os
 cur_path = os.path.abspath(__file__)
 project_root = os.path.abspath(os.path.join(cur_path, os.pardir, os.pardir))
 
-hsmpy_dir = os.path.join(project_root, 'submodules', 'hsmpy')
+submodule_dirs = ['hsmpy', 'quadpy', 'sympy']
 
-paths_to_insert = [hsmpy_dir]
-
-for path in paths_to_insert:
+for dirname in submodule_dirs:
+    path = os.path.join(project_root, 'submodules', dirname)
     sys.path.insert(0, path)

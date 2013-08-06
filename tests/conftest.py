@@ -1,17 +1,16 @@
 import logging
 logging.basicConfig(level=logging.DEBUG)
 
-# add packages that are imported as git submodules to sys module path:
-
+# add packages that are imported as git submodules
+# to sys module lookup path (workaround until buildout workflow is fixed)
+import sys
 import os
 
 cur_path = os.path.abspath(__file__)
 project_root = os.path.abspath(os.path.join(cur_path, os.pardir, os.pardir))
 
-hsmpy_dir = os.path.join(project_root, 'submodules', 'hsmpy')
+submodule_dirs = ['hsmpy', 'quadpy', 'sympy']
 
-paths_to_insert = [hsmpy_dir]
-
-import sys
-for path in paths_to_insert:
+for dirname in submodule_dirs:
+    path = os.path.join(project_root, 'submodules', dirname)
     sys.path.insert(0, path)

@@ -1,4 +1,12 @@
 [submodule "submodules/hsmpy"]
 	path = submodules/hsmpy
 	url = https://github.com/bgr/hsmpy.git
-    ignore = dirty
+	ignore = dirty
+[submodule "submodules/quadpy"]
+	path = submodules/quadpy
+	url = https://github.com/bgr/quadpy.git
+	ignore = dirty
+[submodule "submodules/sympy"]
+	path = submodules/sympy
+	url = https://github.com/sympy/sympy.git
+	ignore = dirty
