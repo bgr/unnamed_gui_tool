@@ -27,6 +27,10 @@ def with_preceding(ls):
         yield (el, ls[:i])
 
 
+def fseq(functions, *args, **kwargs):
+    """Calls every function in sequence with given arguments."""
+    return lambda *args, **kwargs: [f(*args, **kwargs) for f in functions]
+
 
 def is_valid_identifier(str_val):
     return (not _iskeyword(str_val) and

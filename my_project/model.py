@@ -37,7 +37,7 @@ class _BaseElement(Record):
     keys = ('x', 'y', 'width', 'height')
 
     @classmethod
-    def prepare(cls, x, y, width, height):
+    def prepare(cls, x, y, width, height, **kwargs):
         x, y, width, height = map(float, [x, y, width, height])
         if width < 0:
             x -= -width
@@ -45,7 +45,9 @@ class _BaseElement(Record):
         if height < 0:
             y -= -height
             height = -height
-        return dict(zip(cls.keys, [x, y, width, height]))
+        ret = dict(zip(cls.keys, [x, y, width, height]))
+        ret.update(kwargs)
+        return ret
 
 
 class Rectangle(_BaseElement):
@@ -60,7 +62,11 @@ class Line(_BaseElement):
     pass
 
 
-class Polyline(_BaseElement):
+class Path(_BaseElement):
+    keys = ('vertices',)
+
+
+class Polygon(_BaseElement):
     keys = ('segments',)
 
 
