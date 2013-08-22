@@ -65,10 +65,10 @@ class CanvasView(JPanel):
         switch = {
             model.Insert: lambda ch: self.add_elem(ch.elem),
             model.Remove: lambda ch: self.remove_elem(ch.elem),
-            model.Modify: fseq([
+            model.Modify: fseq(
                 lambda ch: self.remove_elem(ch.elem),
                 lambda ch: self.add_elem(ch.modified)
-            ]),
+            ),
         }
         [switch[ch.__class__](ch) for ch in changes]
         self.repaint()
@@ -100,7 +100,7 @@ class CanvasView(JPanel):
     @staticmethod
     def draw_path(el, g):
         shape = awt.geom.Path2D.Float()
-        shape.moveTo(*map(sum, zip((el.x, el.y), el.vertices[0])))
+        shape.moveTo(*el.vertices[0])
         for v in el.vertices[1:]:
-            shape.lineTo(*map(sum, zip((el.x, el.y), v)))
+            shape.lineTo(*v)
         g.draw(shape)

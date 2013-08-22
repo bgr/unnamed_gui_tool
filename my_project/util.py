@@ -27,9 +27,24 @@ def with_preceding(ls):
         yield (el, ls[:i])
 
 
-def fseq(functions, *args, **kwargs):
-    """Calls every function in sequence with given arguments."""
+def fseq(*functions):
+    """
+        Wraps given functions into single function that will, when called, call
+        all functions in given sequence in the order they were given, passing
+        the arguments to every function. Return value of the wrapper function
+        is list of return values of each function.
+    """
     return lambda *args, **kwargs: [f(*args, **kwargs) for f in functions]
+
+
+def bounding_box_around_points(point_list):
+    def expand_box(current_box, new_point):
+        min_x, min_y, max_x, max_y = current_box
+        x, y = new_point
+        return (min(min_x, x), min(min_y, y), max(max_x, x), max(max_y, y))
+    neg_inf = float("-inf")
+    pos_inf = float("inf")
+    return reduce(expand_box, point_list, (pos_inf, pos_inf, neg_inf, neg_inf))
 
 
 def is_valid_identifier(str_val):

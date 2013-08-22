@@ -1,6 +1,6 @@
 import logging
 
-from util import duplicates, Record
+from util import duplicates, Record, bounding_box_around_points
 from events import Commit_To_Model, Model_Changed
 
 _log = logging.getLogger(__name__)
@@ -33,41 +33,58 @@ class Modify(_BaseChange):
 
 # model elements
 
-class _BaseElement(Record):
-    keys = ('x', 'y', 'width', 'height')
+def fix_xywh(x, y, width, height):
+    x, y, width, height = map(float, [x, y, width, height])
+    if width < 0:
+        x -= -width
+        width = -width
+    if height < 0:
+        y -= -height
+        height = -height
+    return { 'x': x, 'y': y, 'width': width, 'height': height }
 
-    @classmethod
-    def prepare(cls, x, y, width, height, **kwargs):
-        x, y, width, height = map(float, [x, y, width, height])
-        if width < 0:
-            x -= -width
-            width = -width
-        if height < 0:
-            y -= -height
-            height = -height
-        ret = dict(zip(cls.keys, [x, y, width, height]))
-        ret.update(kwargs)
-        return ret
+
+class _BaseElement(Record):
+    pass
 
 
 class Rectangle(_BaseElement):
-    pass
+    keys = ('x', 'y', 'width', 'height')
+
+    @classmethod
+    def prepare(cls, x, y, width, height):
+        return fix_xywh(x, y, width, height)
+
+    @property
+    def bounds(self):
+        return (self.x, self.y, self.x + self.width, self.y + self.height)
 
 
 class Ellipse(_BaseElement):
-    pass
+    keys = ('x', 'y', 'width', 'height')
 
+    @classmethod
+    def prepare(cls, x, y, width, height):
+        return fix_xywh(x, y, width, height)
 
-class Line(_BaseElement):
-    pass
+    @property
+    def bounds(self):
+        return (self.x, self.y, self.x + self.width, self.y + self.height)
 
 
 class Path(_BaseElement):
     keys = ('vertices',)
+    # TODO: prepare
+
+    @property
+    def bounds(self):
+        return bounding_box_around_points(self.vertices)
 
 
-class Polygon(_BaseElement):
-    keys = ('segments',)
+#class Polygon(_BaseElement):
+    #keys = ('vertices',)
+
+
 
 
 class CanvasModel(object):
@@ -110,7 +127,8 @@ class CanvasModel(object):
 
 def _commit(changes, changelog, eb, elems):
     """Performs the changes to model's elements and informs listeners."""
-    _log.info('Model got changelist {0}'.format(changes))
+    _log.info('Model got changelist {0}'.format(
+        ''.join(['\n * ' + str(ch) for ch in changes])))
 
     if not changes:  # ignore empty changelist
         return
@@ -179,7 +197,7 @@ def _parse(changelist, existing):
     if duplicates(elems_ins + elems_old + elems_mod):
         raise ValueError("Changing and inserting identical elements")
 
-    if any(el.width == 0 and el.height == 0 for el in elems_mod + elems_ins):
+    if any(el.bounds == (0, 0) for el in elems_mod + elems_ins):
         raise ValueError("Elements with 0 dimensions")
 
     # everything ok

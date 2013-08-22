@@ -16,16 +16,15 @@ import shape_tool
 
 # interaction with model
 
-def commit_to_model(evt, hsm):
-    """Creates a changelist and dispatches event that'll cause model update."""
-    el = hsm.data.canvas_temp_elem
-    if el.width == 0 and el.height == 0:
-        _log.info("not commiting {0} (0 dimensions)".format(el))
-        1 / 0
-        return
-    _log.info("committing to model {0}".format(el))
-    # dispatch event to add to model
-    hsm.eb.dispatch(Commit_To_Model( [model.Insert(el)] ))
+#def commit_element_to_model(elem, eventbus):
+    #"""Creates a changelist and dispatches event that'll cause model update."""
+    #if elem.width == 0 and elem.height == 0:
+        #_log.info("not commiting {0} (0 dimensions)".format(elem))
+        #1 / 0
+        #return
+    #_log.info("committing to model {0}".format(elem))
+    ## dispatch event to add to model
+    #eventbus.dispatch(Commit_To_Model( [model.Insert(elem)] ))
 
 
 
@@ -52,10 +51,10 @@ def make(eventbus):
     class Tool_Done(Event): pass
 
     view = canvas.CanvasView(300, 300)
-    view.mouseReleased = lambda e: eventbus.dispatch(Canvas_Up(e.x, e.y))
-    view.mouseMoved = lambda e: eventbus.dispatch(Canvas_Move(e.x, e.y))
+    view.mouseReleased = lambda evt: eventbus.dispatch(Canvas_Up(evt))
+    view.mouseMoved = lambda evt: eventbus.dispatch(Canvas_Move(evt))
     view.mouseDragged = view.mouseMoved
-    view.mousePressed = lambda e: eventbus.dispatch(Canvas_Down(e.x, e.y))
+    view.mousePressed = lambda evt: eventbus.dispatch(Canvas_Down(evt))
 
     shape_states, shape_trans = shape_tool.make(eventbus, view, Canvas_Down,
                                                 Canvas_Up, Canvas_Move,
