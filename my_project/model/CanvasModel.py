@@ -1,89 +1,9 @@
 import logging
-
-from util import duplicates, Record, bounding_box_around_points
-from events import Commit_To_Model, Model_Changed
-
 _log = logging.getLogger(__name__)
 
-
-class _BaseChange(Record):
-    keys = ('elem',)
-
-    @classmethod
-    def prepare(_, elem):
-        assert isinstance(elem, _BaseElement), "must be valid element"
-
-
-class Remove(_BaseChange):
-    pass
-
-
-class Insert(_BaseChange):
-    pass
-
-
-class Modify(_BaseChange):
-    keys = ('modified',)
-
-    @classmethod
-    def prepare(cls, elem, modified):
-        _BaseChange.prepare(elem)
-        assert isinstance(modified, _BaseElement), "must be valid element"
-
-
-# model elements
-
-def fix_xywh(x, y, width, height):
-    x, y, width, height = map(float, [x, y, width, height])
-    if width < 0:
-        x -= -width
-        width = -width
-    if height < 0:
-        y -= -height
-        height = -height
-    return { 'x': x, 'y': y, 'width': width, 'height': height }
-
-
-class _BaseElement(Record):
-    pass
-
-
-class Rectangle(_BaseElement):
-    keys = ('x', 'y', 'width', 'height')
-
-    @classmethod
-    def prepare(cls, x, y, width, height):
-        return fix_xywh(x, y, width, height)
-
-    @property
-    def bounds(self):
-        return (self.x, self.y, self.x + self.width, self.y + self.height)
-
-
-class Ellipse(_BaseElement):
-    keys = ('x', 'y', 'width', 'height')
-
-    @classmethod
-    def prepare(cls, x, y, width, height):
-        return fix_xywh(x, y, width, height)
-
-    @property
-    def bounds(self):
-        return (self.x, self.y, self.x + self.width, self.y + self.height)
-
-
-class Path(_BaseElement):
-    keys = ('vertices',)
-    # TODO: prepare
-
-    @property
-    def bounds(self):
-        return bounding_box_around_points(self.vertices)
-
-
-#class Polygon(_BaseElement):
-    #keys = ('vertices',)
-
+from ..util import duplicates
+from ..events import Commit_To_Model, Model_Changed
+from elements import Remove, Insert, Modify, _BaseElement
 
 
 
@@ -92,9 +12,7 @@ class CanvasModel(object):
         self._elems = []
         self._changelog = []
         self._eb = eventbus
-        # call 'commit' and pass event.data as changelist
         self._eb.register(Commit_To_Model, lambda evt: self.commit(evt.data))
-
 
     @property
     def elems(self):
@@ -150,6 +68,7 @@ def _commit(changes, changelog, eb, elems):
     eb.dispatch(Model_Changed(log))
 
 
+
 def _parse(changelist, existing):
     """
         Validates changes in changelist and returns tuple:
@@ -197,7 +116,10 @@ def _parse(changelist, existing):
     if duplicates(elems_ins + elems_old + elems_mod):
         raise ValueError("Changing and inserting identical elements")
 
-    if any(el.bounds == (0, 0) for el in elems_mod + elems_ins):
+    if any(len(el.bounds) != 4 for el in elems_mod + elems_ins):
+        raise ValueError("Elements with invalid bounds tuple")
+    if any(el.bounds[2:] == el.bounds[:2] for el in elems_mod + elems_ins):
+        # (x1, y1) == (x2, y2) where bounds is tuple (x1, y1, x2, y2)
         raise ValueError("Elements with 0 dimensions")
 
     # everything ok
