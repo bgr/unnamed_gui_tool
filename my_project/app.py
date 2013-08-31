@@ -19,10 +19,10 @@ logging.basicConfig(level=logging.INFO)
 
 
 class LoggingState(State):
-    def enter(self, evt, hsm):
+    def enter(self, hsm):
         logging.getLogger('HSM.{0}'.format(self.name)).info('entering')
 
-    def exit(self, evt, hsm):
+    def exit(self, hsm):
         logging.getLogger('HSM.{0}'.format(self.name)).info('exiting')
 
 # alias class so that it can easily be switched
@@ -38,22 +38,12 @@ class AppFrame(JFrame):
         self.defaultCloseOperation = JFrame.EXIT_ON_CLOSE
         self.visible = True
 
-        #btn_ellipse = JButton('Ellipse',
-                              #actionPerformed=lambda evt:
-                              #eventbus.dispatch(Tool_Changed('ellipse')))
-        #btn_rectangle = JButton('Rectangle',
-                                #actionPerformed=lambda evt:
-                                #eventbus.dispatch(Tool_Changed('rectangle')))
-        btn_path = JButton('Path',
-                           actionPerformed=lambda evt:
-                           eventbus.dispatch(Tool_Changed('path')))
-        #btn_polygon = JButton('Polygon',
-                              #actionPerformed=lambda evt:
-                              #eventbus.dispatch(Tool_Changed('polygon')))
-        #self.add(btn_ellipse)
-        #self.add(btn_rectangle)
-        self.add(btn_path)
-        #self.add(btn_polygon)
+        def btn(tool_name):
+            return JButton(tool_name, actionPerformed=lambda evt:
+                           eventbus.dispatch(Tool_Changed(tool_name)))
+
+        self.add(btn('combo'))
+        self.add(btn('path'))
 
 
 @invokeLater

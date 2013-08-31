@@ -27,6 +27,11 @@ def with_preceding(ls):
         yield (el, ls[:i])
 
 
+def join_dicts(*dicts):
+    """Joins two dictionaries (dumb, will discard some value if same keys)."""
+    return dict(reduce(list.__add__, [d.items() for d in dicts]))
+
+
 def fseq(*functions):
     """
         Wraps given functions into single function that will, when called, call

@@ -12,9 +12,16 @@ from ...events import Commit_To_Model
 
 
 
-def make(eventbus, view, Canvas_Down, Canvas_Up, Canvas_Move, Tool_Done):
+def make(eb, view, Canvas_Down, Canvas_Up, Canvas_Move, Tool_Done):
+    """
+        Returns separate states dicts and trans dict for idle and engaged tool
+        behaviors as a tuple:
+            (idle_state_dict, engaged_state_dict, transitions_dict)
+        so that they can be integrated within parent states by simple dict
+        joining, performed in widgets.canvas.main.make function.
+    """
 
-    # temporary holder objects used while the shape is still being drawn
+    # temporary holder objects used while the path is still being drawn
     vertices = []
 
     def add_vertex(evt, hsm):
@@ -25,15 +32,15 @@ def make(eventbus, view, Canvas_Down, Canvas_Up, Canvas_Move, Tool_Done):
     def update_last_segment(evt, hsm):
         vertices[-1] = (evt.x, evt.y)
 
-    def commit_and_finish(evt, hsm):
+    def commit_and_finish(hsm):
         # work around "TypeError: unhashable type list" that arrises in
         # util.duplicates when model.parse checks for duplicate elements since
         # vertices list is unhashable and also makes model safer since tuple
         # is immutable
         path = model.Path(tuple(vertices))
         _log.info('about to commit path {0}'.format(path))
-        eventbus.dispatch(Commit_To_Model( [model.Insert(path)] ))
-        eventbus.dispatch(Tool_Done())
+        eb.dispatch(Commit_To_Model( [model.Insert(path)] ))
+        eb.dispatch(Tool_Done())
         vertices[:] = []  # clear
 
     def redraw_path(evt, hsm):
@@ -41,35 +48,33 @@ def make(eventbus, view, Canvas_Down, Canvas_Up, Canvas_Move, Tool_Done):
         view.draw_once([path])
 
 
-    states = {
-        'top': S({
-            'path_tool': S({
-                'path_hovering': S(),
-                'path_drawing': S(on_enter=add_vertex),
-                'path_finished': S(on_enter=commit_and_finish),
-            }),
-        })
+    idle = {
+        'path_idle': S(),
+    }
+
+    engaged = {
+        'path_engaged': S({
+            'path_drawing': S(),
+            'path_finished': S(on_enter=commit_and_finish),
+        }),
     }
 
     trans = {
-        'top': {
-            Initial: T('path_tool'),
+        'path_idle': {
+            Canvas_Down: T('path_drawing',   # add 2 vertices to make a segment
+                           action=fseq(add_vertex, add_vertex)),
         },
-        'path_tool': {
-            Initial: T('path_hovering'),
-        },
-        'path_hovering': {
-            Canvas_Down: T('path_drawing', action=add_vertex),
+        'path_engaged': {
+            Initial: T('path_drawing'),
         },
         'path_drawing': {
-            Canvas_Move: Internal(action=fseq(
-                update_last_segment,
-                redraw_path)),
+            Canvas_Move: Internal(fseq( update_last_segment, redraw_path )),
             Canvas_Down: Choice({
                 False: 'path_drawing',
                 True: 'path_finished' },
-                key=lambda e, _: SwingUtilities.isRightMouseButton(e.orig)),
+                key=lambda e, _: SwingUtilities.isRightMouseButton(e.orig),
+                action=add_vertex),
         },
     }
 
-    return (states, trans)
+    return (idle, engaged, trans)
