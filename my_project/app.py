@@ -3,7 +3,7 @@ from javax.swing import JFrame, JButton, BoxLayout
 from javautils import invokeLater
 import widgets.canvas
 from model import CanvasModel, Rectangle, Ellipse
-from events import Tool_Changed
+from events import Tool_Changed, PATH_TOOL, COMBO_TOOL
 from hsmpy import HSM, EventBus, State, Initial
 from hsmpy import Transition as T
 import logging
@@ -42,18 +42,20 @@ class AppFrame(JFrame):
             return JButton(tool_name, actionPerformed=lambda evt:
                            eventbus.dispatch(Tool_Changed(tool_name)))
 
-        self.add(btn('combo'))
-        self.add(btn('path'))
+        self.add(btn(PATH_TOOL))
+        self.add(btn(COMBO_TOOL))
 
 
 @invokeLater
 def run():
     eventbus = EventBus()
     model = CanvasModel(eventbus)
-    model.elems = [Ellipse(20, 30, 40, 50), Rectangle(30, 40, 10, 20)]
+    #model.elems = [Ellipse(20, 30, 40, 50), Rectangle(30, 40, 10, 20)]
 
-    cvs_view_1, cvs_states_1, cvs_trans_1 = widgets.canvas.make(eventbus)
-    cvs_view_2, cvs_states_2, cvs_trans_2 = widgets.canvas.make(eventbus)
+    cvs_view_1, cvs_states_1, cvs_trans_1 = widgets.canvas.make(eventbus,
+                                                                model.query)
+    cvs_view_2, cvs_states_2, cvs_trans_2 = widgets.canvas.make(eventbus,
+                                                                model.query)
 
     app_states = {
         'top': {

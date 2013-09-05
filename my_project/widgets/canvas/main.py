@@ -2,12 +2,10 @@ import logging
 _log = logging.getLogger(__name__)
 
 from hsmpy import Event, Initial, T, Internal, Choice
-from ... import model
 from ...app import S
 from ...util import join_dicts
 from ...events import (Mouse_Down, Mouse_Up, Mouse_Move, Tool_Changed,
-                       Model_Changed)
-
+                       Model_Changed, PATH_TOOL, COMBO_TOOL)
 from CanvasView import CanvasView
 
 # tool behaviors are defined using sub-HSMs in separate modules:
@@ -16,7 +14,7 @@ import combo_tool
 
 
 
-def make(eventbus):
+def make(eventbus, model_query):
     """
         Main function that creates the view instance wired up with HSM states
         and transitions that this function returns, which are ready to be used
@@ -31,14 +29,14 @@ def make(eventbus):
     class Canvas_Move(Mouse_Move): pass
     class Tool_Done(Event): pass
 
-    view = CanvasView(300, 300)
+    view = CanvasView(300, 300, model_query)
     view.mouseReleased = lambda evt: eventbus.dispatch(Canvas_Up(evt))
     view.mouseMoved = lambda evt: eventbus.dispatch(Canvas_Move(evt))
     view.mouseDragged = view.mouseMoved
     view.mousePressed = lambda evt: eventbus.dispatch(Canvas_Down(evt))
 
     def set_up(hsm):
-        hsm.data.canvas_tool = 'path'  # TODO: use variable instead of string
+        hsm.data.canvas_tool = COMBO_TOOL
         _log.info("HSM tool set to {0}".format(hsm.data.canvas_tool))
 
     def remember_selected_tool(evt, hsm):
@@ -68,7 +66,7 @@ def make(eventbus):
 
 
     update_view = lambda evt, _: view.draw_changes(evt.data)
-    get_tool = lambda _, hsm: hsm.data.canvas_tool or 'combo'
+    get_tool = lambda _, hsm: hsm.data.canvas_tool or COMBO_TOOL
 
 
     trans = join_dicts(
@@ -82,10 +80,10 @@ def make(eventbus):
             'idle': {
                 Initial: Choice(
                     {
-                        'combo': 'combo_idle',
-                        'path': 'path_idle',
-                        # FIXME: use variable instead of string; referencing
-                        # state name that's not specified in this file - ugly
+                        COMBO_TOOL: 'combo_idle',
+                        PATH_TOOL: 'path_idle',
+                        # TODO: reorganize code, referencing state name that's
+                        # not specified in this file = ugly
                     },
                     default='path_idle',
                     key=get_tool),
@@ -95,7 +93,7 @@ def make(eventbus):
             'engaged': {
                 # should never be called since substates are always
                 # transitioned to directly
-                Initial: T('path_engaged', action=lambda e, h: 1 / 0),
+                Initial: T('path_engaged', action=lambda _, __: 1 / 0),
                 # tool is engaged, remember new tool for later, don't change
                 Tool_Changed: Internal(action=remember_selected_tool),
                 Tool_Done: T('idle'),

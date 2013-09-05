@@ -1,5 +1,8 @@
 from hsmpy import Event
 
+PATH_TOOL = 'path tool'
+COMBO_TOOL = 'combo tool'
+
 
 class Mouse_Event(Event):
     def __init__(self, *args):

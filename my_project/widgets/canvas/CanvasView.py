@@ -7,25 +7,19 @@ from ...util import fseq
 
 class CanvasView(JPanel):
 
-    def __init__(self, width, height):
+    # TODO: query functionality maybe should be moved from model to here
+    def __init__(self, width, height, query):
         super(self.__class__, self).__init__()
         self.size = (width, height)
         self.preferredSize = (width, height)
         self._elems = []
+        self.query = query
 
         self._elems = []
         self._draw_once_elems = []
         self._selected = set([])
         self._background_color = awt.Color.WHITE
         self._stroke_color = awt.Color.BLACK
-
-        # maps model elements to corresponding functions that can draw them
-        self.drawing_handlers = {
-            model.Ellipse: CanvasView.draw_ellipse,
-            model.Rectangle: CanvasView.draw_rectangle,
-            model.Path: CanvasView.draw_path,
-            #model.Polygon: CanvasView.draw_polygon,
-        }
 
     @property
     def background_color(self):  # TODO: redundant, JPanel already has this
@@ -63,14 +57,15 @@ class CanvasView(JPanel):
 
     def draw_changes(self, changes):
         switch = {
-            model.Insert: lambda ch: self.add_elem(ch.elem),
-            model.Remove: lambda ch: self.remove_elem(ch.elem),
+            model.Insert: lambda ch: self.add_elem(ch.elem, repaint=False),
+            model.Remove: lambda ch: self.remove_elem(ch.elem, repaint=False),
             model.Modify: fseq(
-                lambda ch: self.remove_elem(ch.elem),
-                lambda ch: self.add_elem(ch.modified)
+                lambda ch: self.remove_elem(ch.elem, repaint=False),
+                lambda ch: self.add_elem(ch.modified, repaint=False),
             ),
         }
-        [switch[ch.__class__](ch) for ch in changes]
+        for ch in changes:
+            switch[ch.__class__](ch)
         self.repaint()
 
 
@@ -85,22 +80,45 @@ class CanvasView(JPanel):
         g.fillRect(0, 0, self.width, self.height)
         g.color = self._stroke_color
         for el in self._elems + self._draw_once_elems:
-            self.drawing_handlers[el.__class__](el, g)
+            g.draw(shape(el))
 
-    # functions that perform drawing for each supported element type:
 
-    @staticmethod
-    def draw_rectangle(el, g):
-        g.drawRect(*map(int, el))
+    def elements_at(self, x, y):
+        elems = self.query.under(x, y)
 
-    @staticmethod
-    def draw_ellipse(el, g):
-        g.drawOval(*map(int, el))
+        def contains(el, x, y):
+            sh = shape(el)
+            if isinstance(el, model.Path):
+                # have to check against the stroke since Java's path is
+                # implicitly closed and behaves like a polygon
+                sh = awt.BasicStroke(2).createStrokedShape(sh)
+            return sh.contains(x, y)
 
-    @staticmethod
-    def draw_path(el, g):
-        shape = awt.geom.Path2D.Float()
-        shape.moveTo(*el.vertices[0])
-        for v in el.vertices[1:]:
-            shape.lineTo(*v)
-        g.draw(shape)
+        return [el for el in elems if contains(el, x, y)]
+
+
+
+def rectangle(el):
+    return awt.geom.Rectangle2D.Double(el.x, el.y, el.width, el.height)
+
+def ellipse(el):
+    return awt.geom.Ellipse2D.Double(el.x, el.y, el.width, el.height)
+
+def path(el):
+    shape = awt.geom.Path2D.Float()
+    shape.moveTo(*el.vertices[0])
+    for v in el.vertices[1:]:
+        shape.lineTo(*v)
+    return shape
+
+
+# maps model elements to functions that create java.awt.Shape out of them
+shape_map = {
+    model.Ellipse: ellipse,
+    model.Rectangle: rectangle,
+    model.Path: path,
+    #model.Polygon: polygon,
+}
+
+def shape(model_element):
+    return shape_map[model_element.__class__](model_element)

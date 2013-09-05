@@ -22,17 +22,62 @@ def make(eb, view, Canvas_Down, Canvas_Up, Canvas_Move, Tool_Done):
     """
 
     idle = {
-        'combo_idle': S(),
+        'combo_idle': S({
+            'combo_over_background': S(),
+            #'combo_over_unselected_element': S(),
+            #'combo_over_selected_element': S(),
+        }),
     }
 
     engaged = {
-        'combo_engaged': S(on_enter=lambda h: eb.dispatch(Tool_Done())),
+        'combo_engaged': S({
+            'combo_dragging_marquee': S(),
+            #'combo_dragging_selection': S(),
+        }),
     }
+
+    def whats_under_cursor(evt, hsm):
+        el = next(iter(view.elements_at(evt.x, evt.y)), None)
+        _log.info('under cursor is {0}'.format(el))
+
+
+    hover_choice = Choice({
+        None: 'combo_over_background',
+        'unselected': 'combo_over_unselected_element',
+        #'selected': 'combo_over_selected_element',
+    }, key=whats_under_cursor, default='combo_over_background')
+
+    def printer(msg):
+        def func(e, h):
+            _log.info(msg)
+            _log.info(e)
+        return func
+
 
     trans = {
         'combo_idle': {
-            Canvas_Down: T('combo_engaged'),
+            Initial: T('combo_over_background'),
+            #Canvas_Move: hover_choice,
+            Canvas_Move: Internal(whats_under_cursor)
         },
+        'combo_engaged': {
+            Initial: T('combo_dragging_marquee', action=lambda _, __: 1 / 0),
+            Canvas_Up: Internal(lambda _, __: eb.dispatch(Tool_Done())),
+        },
+
+        'combo_over_background': {
+            Canvas_Down: T('combo_dragging_marquee'),
+        },
+        #'combo_over_unselected_element': {
+            #Canvas_Down: T('combo_dragging_selection'),
+        #},
+
+        'combo_dragging_marquee': {
+            Canvas_Move: Internal(printer("I'm dragging marquee")),
+        },
+        #'combo_dragging_selection': {
+            #Canvas_Move: Internal(printer("I'm dragging some elements")),
+        #}
     }
 
     return (idle, engaged, trans)
