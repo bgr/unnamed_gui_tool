@@ -46,6 +46,7 @@ def make(eb, view, Canvas_Down, Canvas_Up, Canvas_Move, Tool_Done):
     def redraw_path(evt, hsm):
         path = model.Path(tuple(vertices))
         view.draw_once([path])
+        view.repaint()
 
 
     idle = {

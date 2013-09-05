@@ -1,14 +1,12 @@
 import logging
 _log = logging.getLogger(__name__)
 
-from javax.swing import SwingUtilities
-
 from hsmpy import Initial, T, Choice, Internal
 
 from ...app import S
+from ...events import Commit_To_Model
 from ... import model
 from ...util import fseq
-from ...events import Commit_To_Model
 
 
 
@@ -21,63 +19,132 @@ def make(eb, view, Canvas_Down, Canvas_Up, Canvas_Move, Tool_Done):
         joining, performed in widgets.canvas.main.make function.
     """
 
+    def clear_marquee(hsm):
+        view.marquee = None
+        view.repaint()
+
+
     idle = {
         'combo_idle': S({
             'combo_over_background': S(),
-            #'combo_over_unselected_element': S(),
-            #'combo_over_selected_element': S(),
+            'combo_over_selected_element': S(),
+            'combo_over_unselected_element': S(),
         }),
     }
 
     engaged = {
         'combo_engaged': S({
-            'combo_dragging_marquee': S(),
-            #'combo_dragging_selection': S(),
+            'combo_dragging_marquee': S(on_exit=clear_marquee),
+            'combo_wait_for_drag_selection': S(),
+            'combo_dragging_selection': S(),
         }),
     }
 
-    def whats_under_cursor(evt, hsm):
-        el = next(iter(view.elements_at(evt.x, evt.y)), None)
-        _log.info('under cursor is {0}'.format(el))
 
+    mouse_coords = []
+
+    def remember_mouse_coords(evt, _):
+        mouse_coords[:] = [evt.x, evt.y]
+
+    def elem_at(x, y):
+        return next(iter(view.elements_at(x, y)), None)
+
+    def whats_at_mouse_coords(*_, **__):
+        if not mouse_coords:
+            return 'bg'
+        el = elem_at(*mouse_coords)
+        if el is None:
+            return 'bg'
+        elif el in view.selection:
+            return 'sel'
+        else:
+            return 'unsel'
 
     hover_choice = Choice({
-        None: 'combo_over_background',
-        'unselected': 'combo_over_unselected_element',
-        #'selected': 'combo_over_selected_element',
-    }, key=whats_under_cursor, default='combo_over_background')
+        'bg': 'combo_over_background',
+        'sel': 'combo_over_selected_element',
+        'unsel': 'combo_over_unselected_element',
+    }, key=whats_at_mouse_coords, default='combo_over_background')
 
-    def printer(msg):
-        def func(e, h):
-            _log.info(msg)
-            _log.info(e)
-        return func
+    def select_elem_under_cursor(evt, hsm):
+        view.selection = [elem_at(evt.x, evt.y)]
+
+    def deselect_all(*_, **__):
+        view.selection = []
+
+    def set_marquee(evt, hsm):
+        x, y = mouse_coords
+        view.marquee = (x, y, evt.x, evt.y)
+
+    def redraw_view(*_, **__):
+        view.repaint()
+
+    def simulate_fake_move(evt, hsm):
+        x, y = mouse_coords
+        dx, dy = evt.x - x, evt.y - y
+        moved = [el.move(dx, dy) for el in view.selection]
+        view.draw_once(moved)
+
+    def commit_real_move(evt, hsm):
+        x, y = mouse_coords
+        dx, dy = evt.x - x, evt.y - y
+        if (dx, dy) == (0, 0):
+            return
+        changes = [model.Modify(el, el.move(dx, dy)) for el in view.selection]
+        _log.info('about to commit {0} elems, moved by {1} x {2} px'.format(
+            len(changes), dx, dy))
+        eb.dispatch(Commit_To_Model(changes))
+
+
+    dispatch_Tool_Done = lambda *_, **__: eb.dispatch(Tool_Done())
 
 
     trans = {
         'combo_idle': {
-            Initial: T('combo_over_background'),
-            #Canvas_Move: hover_choice,
-            Canvas_Move: Internal(whats_under_cursor)
+            Initial: hover_choice,
+            Canvas_Move: T('combo_idle', remember_mouse_coords),
         },
         'combo_engaged': {
+            # never called, should always transition directly to substates
             Initial: T('combo_dragging_marquee', action=lambda _, __: 1 / 0),
-            Canvas_Up: Internal(lambda _, __: eb.dispatch(Tool_Done())),
         },
 
         'combo_over_background': {
-            Canvas_Down: T('combo_dragging_marquee'),
+            Canvas_Down: T('combo_dragging_marquee', fseq(
+                deselect_all,
+                remember_mouse_coords)),
         },
-        #'combo_over_unselected_element': {
-            #Canvas_Down: T('combo_dragging_selection'),
-        #},
+        'combo_over_unselected_element': {
+            Canvas_Down: T('combo_wait_for_drag_selection', fseq(
+                select_elem_under_cursor,
+                redraw_view)),
+        },
+        'combo_over_selected_element': {
+            Canvas_Down: T('combo_wait_for_drag_selection'),
+        },
 
         'combo_dragging_marquee': {
-            Canvas_Move: Internal(printer("I'm dragging marquee")),
+            Canvas_Move: Internal(fseq(
+                set_marquee,
+                redraw_view)),
+            Canvas_Up: Internal(dispatch_Tool_Done),
         },
-        #'combo_dragging_selection': {
-            #Canvas_Move: Internal(printer("I'm dragging some elements")),
-        #}
+
+        'combo_wait_for_drag_selection': {
+            Canvas_Move: T('combo_dragging_selection', remember_mouse_coords),
+            Canvas_Up: Internal(dispatch_Tool_Done),  # nothing done, cancel
+        },
+
+        'combo_dragging_selection': {
+            Canvas_Move: Internal(fseq(
+                simulate_fake_move,
+                redraw_view)),
+            Canvas_Up: Internal(fseq(
+                commit_real_move,
+                redraw_view,
+                remember_mouse_coords,  # so that next Initial can detect under
+                dispatch_Tool_Done)),
+        }
     }
 
     return (idle, engaged, trans)

@@ -2,6 +2,7 @@ from hsmpy import Event
 
 PATH_TOOL = 'path tool'
 COMBO_TOOL = 'combo tool'
+ELLIPSE_TOOL = 'ellipse tool'
 
 
 class Mouse_Event(Event):

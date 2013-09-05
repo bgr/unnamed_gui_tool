@@ -46,6 +46,13 @@ def fix_xywh(x, y, width, height):
 class _BaseElement(Record):
     pass
 
+    @property
+    def bounds(self):
+        raise NotImplementedError("Forgot to implement 'bounds' property")
+
+    def move(self, dx, dy):
+        raise NotImplementedError("Forgot to implement 'move' method")
+
 
 class Rectangle(_BaseElement):
     keys = ('x', 'y', 'width', 'height')
@@ -57,6 +64,9 @@ class Rectangle(_BaseElement):
     @property
     def bounds(self):
         return (self.x, self.y, self.x + self.width, self.y + self.height)
+
+    def move(self, dx, dy):
+        return Rectangle(self.x + dx, self.y + dy, self.width, self.height)
 
 
 class Ellipse(_BaseElement):
@@ -70,6 +80,9 @@ class Ellipse(_BaseElement):
     def bounds(self):
         return (self.x, self.y, self.x + self.width, self.y + self.height)
 
+    def move(self, dx, dy):
+        return Ellipse(self.x + dx, self.y + dy, self.width, self.height)
+
 
 class Path(_BaseElement):
     keys = ('vertices',)
@@ -78,6 +91,9 @@ class Path(_BaseElement):
     @property
     def bounds(self):
         return bounding_box_around_points(self.vertices)
+
+    def move(self, dx, dy):
+        return Path(tuple((vx + dx, vy + dy) for vx, vy in self.vertices))
 
 
 #class Polygon(_BaseElement):

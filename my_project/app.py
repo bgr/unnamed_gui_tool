@@ -2,10 +2,9 @@ from java.awt import Color
 from javax.swing import JFrame, JButton, BoxLayout
 from javautils import invokeLater
 import widgets.canvas
-from model import CanvasModel, Rectangle, Ellipse
-from events import Tool_Changed, PATH_TOOL, COMBO_TOOL
-from hsmpy import HSM, EventBus, State, Initial
-from hsmpy import Transition as T
+from model import CanvasModel
+from events import Tool_Changed, PATH_TOOL, COMBO_TOOL, ELLIPSE_TOOL
+from hsmpy import HSM, EventBus, State, Initial, T
 import logging
 
 
@@ -42,8 +41,9 @@ class AppFrame(JFrame):
             return JButton(tool_name, actionPerformed=lambda evt:
                            eventbus.dispatch(Tool_Changed(tool_name)))
 
-        self.add(btn(PATH_TOOL))
         self.add(btn(COMBO_TOOL))
+        self.add(btn(PATH_TOOL))
+        self.add(btn(ELLIPSE_TOOL))
 
 
 @invokeLater
@@ -79,8 +79,8 @@ def run():
     app_frame = AppFrame(eventbus)
     app_frame.add(cvs_view_1)
     app_frame.add(cvs_view_2)
-    cvs_view_2.background_color = Color.GRAY
-    app_frame.size = (500, 700)
+    cvs_view_2.background = Color.GRAY
+    app_frame.size = (1100, 1000)
 
 
 if __name__ == "__main__":

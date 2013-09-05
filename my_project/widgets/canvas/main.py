@@ -5,12 +5,11 @@ from hsmpy import Event, Initial, T, Internal, Choice
 from ...app import S
 from ...util import join_dicts
 from ...events import (Mouse_Down, Mouse_Up, Mouse_Move, Tool_Changed,
-                       Model_Changed, PATH_TOOL, COMBO_TOOL)
+                       Model_Changed, PATH_TOOL, COMBO_TOOL, ELLIPSE_TOOL)
 from CanvasView import CanvasView
 
 # tool behaviors are defined using sub-HSMs in separate modules:
-import path_tool
-import combo_tool
+from . import path_tool, combo_tool, ellipse_tool
 
 
 
@@ -35,8 +34,10 @@ def make(eventbus, model_query):
     view.mouseDragged = view.mouseMoved
     view.mousePressed = lambda evt: eventbus.dispatch(Canvas_Down(evt))
 
+    DEFAULT_TOOL = COMBO_TOOL
+
     def set_up(hsm):
-        hsm.data.canvas_tool = COMBO_TOOL
+        hsm.data.canvas_tool = DEFAULT_TOOL
         _log.info("HSM tool set to {0}".format(hsm.data.canvas_tool))
 
     def remember_selected_tool(evt, hsm):
@@ -50,14 +51,19 @@ def make(eventbus, model_query):
     combo_idle, combo_engaged, combo_trans = combo_tool.make(
         eventbus, view, Canvas_Down, Canvas_Up, Canvas_Move, Tool_Done)
 
+    ellipse_idle, ellipse_engaged, ellipse_trans = ellipse_tool.make(
+        eventbus, view, Canvas_Down, Canvas_Up, Canvas_Move, Tool_Done)
+
 
     states = {
         'top': S(on_enter=set_up, states={
             'idle': S(join_dicts(
+                ellipse_idle,
                 path_idle,
                 combo_idle,
             )),
             'engaged': S(join_dicts(
+                ellipse_engaged,
                 path_engaged,
                 combo_engaged,
             )),
@@ -66,12 +72,13 @@ def make(eventbus, model_query):
 
 
     update_view = lambda evt, _: view.draw_changes(evt.data)
-    get_tool = lambda _, hsm: hsm.data.canvas_tool or COMBO_TOOL
+    get_tool = lambda _, hsm: hsm.data.canvas_tool or DEFAULT_TOOL
 
 
     trans = join_dicts(
         path_trans,
         combo_trans,
+        ellipse_trans,
         {
             'top': {
                 Initial: T('idle'),
@@ -82,10 +89,11 @@ def make(eventbus, model_query):
                     {
                         COMBO_TOOL: 'combo_idle',
                         PATH_TOOL: 'path_idle',
+                        ELLIPSE_TOOL: 'ellipse_idle',
                         # TODO: reorganize code, referencing state name that's
                         # not specified in this file = ugly
                     },
-                    default='path_idle',
+                    default='combo_idle',
                     key=get_tool),
                 # tool is idle, safe to change to another tool by reentering
                 Tool_Changed: T('idle', action=remember_selected_tool),
@@ -93,7 +101,7 @@ def make(eventbus, model_query):
             'engaged': {
                 # should never be called since substates are always
                 # transitioned to directly
-                Initial: T('path_engaged', action=lambda _, __: 1 / 0),
+                Initial: T('combo_engaged', action=lambda _, __: 1 / 0),
                 # tool is engaged, remember new tool for later, don't change
                 Tool_Changed: Internal(action=remember_selected_tool),
                 Tool_Done: T('idle'),
