@@ -27,20 +27,24 @@ def make(eb, view, event_pack, model_commit):
 
     temp_elem_data = []
 
+    def transformed(x, y):
+        return ((x - view.pan_x) / view.zoom, (y - view.pan_y) / view.zoom)
 
     def remember_start_coords(evt, _):
         temp_elem_data[:] = [evt.x, evt.y]
 
     def update_dimensions(evt, _):
-        x, y = temp_elem_data
-        view.draw_once = [model.Ellipse(x, y, evt.x - x, evt.y - y)]
+        x, y = transformed(*temp_elem_data)
+        x2, y2 = transformed(evt.x, evt.y)
+        view.draw_once = [model.Ellipse(x, y, x2 - x, y2 - y)]
 
     def redraw_view(*_):
         view.repaint()
 
     def commit_to_model(evt, _):
-        x, y = temp_elem_data
-        w, h = evt.x - x, evt.y - y
+        x, y = transformed(*temp_elem_data)
+        x2, y2 = transformed(evt.x, evt.y)
+        w, h = x2 - x, y2 - y
         if (w, h) == (0, 0):
             _log.info('not committing ellipse, 0 dimensions')
         else:

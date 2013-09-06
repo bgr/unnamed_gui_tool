@@ -113,6 +113,13 @@ class CanvasView(JPanel):
     def zoom(self, value):
         self._zoom = float(value)
 
+    @property
+    def pan_x(self):
+        return self._pan_x
+
+    @property
+    def pan_y(self):
+        return self._pan_y
 
     def pan(self, h, v):
         self._pan_x += h
@@ -145,6 +152,8 @@ class CanvasView(JPanel):
 
 
     def elements_at(self, x, y):
+        x = (x - self._pan_x) / self._zoom
+        y = (y - self._pan_y) / self._zoom
         elems = self.query.under(x, y)  # coarse, checks against bounding boxes
 
         def check(el):  # precise, checks using java.awt.Shape
@@ -152,18 +161,24 @@ class CanvasView(JPanel):
             if isinstance(el, model.Path):
                 # have to check against the stroke since Java's path is
                 # implicitly closed and behaves like a polygon
-                sh = awt.BasicStroke(LINE_STROKE_WIDTH).createStrokedShape(sh)
+                stroke_width = LINE_STROKE_WIDTH / self._zoom
+                sh = awt.BasicStroke(stroke_width).createStrokedShape(sh)
             return sh.contains(x, y)
 
         return [el for el in elems if check(el)]
 
     def elements_overlapping(self, x1, y1, x2, y2):
+        x1 = (x1 - self._pan_x) / self._zoom
+        x2 = (x2 - self._pan_x) / self._zoom
+        y1 = (y1 - self._pan_y) / self._zoom
+        y2 = (y2 - self._pan_y) / self._zoom
         elems = self.query.overlapped(x1, y1, x2, y2)
 
         def check(el):
             sh = shape(el)
             if isinstance(el, model.Path):
-                sh = awt.BasicStroke(LINE_STROKE_WIDTH).createStrokedShape(sh)
+                stroke_width = LINE_STROKE_WIDTH / self._zoom
+                sh = awt.BasicStroke(stroke_width).createStrokedShape(sh)
             return sh.intersects(x1, y1, x2 - x1, y2 - y1)
 
         return [el for el in elems if check(el)]

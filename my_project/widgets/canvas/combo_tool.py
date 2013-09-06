@@ -83,17 +83,18 @@ def make(eb, view, event_pack, model_commit):
     def simulate_fake_move(evt, hsm):
         x, y = mouse_coords
         dx, dy = evt.x - x, evt.y - y
-        moved = [el.move(dx, dy) for el in view.selection]
+        moved = [el.move(dx / view.zoom, dy / view.zoom)
+                 for el in view.selection]
         view.draw_once = moved
 
     def commit_real_move(evt, hsm):
         x, y = mouse_coords
         dx, dy = evt.x - x, evt.y - y
         if (dx, dy) == (0, 0):
+            _log.info('nothing to commit, moved by 0 px')
             return
-        changes = [model.Modify(el, el.move(dx, dy)) for el in view.selection]
-        _log.info('about to commit {0} elems, moved by {1} x {2} px'.format(
-            len(changes), dx, dy))
+        changes = [model.Modify(el, el.move(dx / view.zoom, dy / view.zoom))
+                   for el in view.selection]
         model_commit(changes)
 
     def select_overlapped_elements(evt, hsm):
