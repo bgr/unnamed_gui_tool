@@ -2,12 +2,13 @@ import java.awt as awt
 from javax.swing import JPanel
 
 from ... import model
-from ...util import fseq
 
 BACKGROUND_COLOR = awt.Color.WHITE
 STROKE_COLOR = awt.Color.BLACK
 MARQUEE_COLOR = awt.Color.BLUE
 SELECTED_COLOR = awt.Color.RED
+
+LINE_STROKE_WIDTH = 9
 
 
 class CanvasView(JPanel):
@@ -24,17 +25,6 @@ class CanvasView(JPanel):
         self._draw_once_elems = []
         self._selected = set([])
         self._marquee = None
-        #self.background = BACKGROUND_COLOR
-
-    #@property
-    #def background_color(self):  # TODO: redundant, JPanel already has this
-        #return self._background_color
-
-
-    #@background_color.setter
-    #def background_color(self, color):
-        #self._background_color = color
-        #self.repaint()
 
 
     def add_elem(self, elem, repaint=False):
@@ -52,7 +42,6 @@ class CanvasView(JPanel):
     @property
     def selection(self):
         return self._selected
-
 
     @selection.setter
     def selection(self, elems):
@@ -103,8 +92,14 @@ class CanvasView(JPanel):
             switch[ch.__class__](ch)
 
 
+    @property
+    def draw_once(self):
+        return self._draw_once_elems
+
+    @draw_once.setter
     def draw_once(self, elems):
-        self._draw_once_elems += elems
+        assert isinstance(elems, (list, tuple))
+        self._draw_once_elems = list(elems)
 
 
     def paintComponent(self, g):
@@ -132,7 +127,7 @@ class CanvasView(JPanel):
             if isinstance(el, model.Path):
                 # have to check against the stroke since Java's path is
                 # implicitly closed and behaves like a polygon
-                sh = awt.BasicStroke(4).createStrokedShape(sh)
+                sh = awt.BasicStroke(LINE_STROKE_WIDTH).createStrokedShape(sh)
             return sh.contains(x, y)
 
         return [el for el in elems if check(el)]
@@ -143,7 +138,7 @@ class CanvasView(JPanel):
         def check(el):
             sh = shape(el)
             if isinstance(el, model.Path):
-                sh = awt.BasicStroke(4).createStrokedShape(sh)
+                sh = awt.BasicStroke(LINE_STROKE_WIDTH).createStrokedShape(sh)
             return sh.intersects(x1, y1, x2 - x1, y2 - y1)
 
         return [el for el in elems if check(el)]

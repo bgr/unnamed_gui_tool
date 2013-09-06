@@ -13,7 +13,7 @@ class CanvasModel(object):
         self._elems = []
         self._changelog = []
         self._eb = eventbus
-        self._eb.register(Commit_To_Model, lambda evt: self.commit(evt.data))
+        #self._eb.register(Commit_To_Model, lambda evt: self.commit(evt.data))
         self._query = CanvasQuery(self)
 
     @property

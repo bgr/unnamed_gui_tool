@@ -4,13 +4,13 @@ _log = logging.getLogger(__name__)
 from hsmpy import Initial, T, Choice, Internal
 
 from ...app import S
-from ...events import Commit_To_Model
 from ... import model
 from ...util import fseq
 
 
 
-def make(eb, view, Canvas_Down, Canvas_Up, Canvas_Move, Tool_Done):
+def make(eb, view, Canvas_Down, Canvas_Up, Canvas_Move, Tool_Done,
+         model_commit):
     """
         Returns separate states dicts and trans dict for idle and engaged tool
         behaviors as a tuple:
@@ -30,7 +30,6 @@ def make(eb, view, Canvas_Down, Canvas_Up, Canvas_Move, Tool_Done):
 
     engaged = {
         'combo_engaged': S({
-            'combo_wait_for_drag_marquee': S(),
             'combo_dragging_marquee': S(),
             'combo_wait_for_drag_selection': S(),
             'combo_dragging_selection': S(),
@@ -44,7 +43,12 @@ def make(eb, view, Canvas_Down, Canvas_Up, Canvas_Move, Tool_Done):
         mouse_coords[:] = [evt.x, evt.y]
 
     def elem_at(x, y):
-        return next(iter(view.elements_at(x, y)), None)
+        elems = view.elements_at(x, y)
+        # sort so that already selected elements are at the beginning of list
+        # that's useful when trying to click already selected element which
+        # happens to be under unselected elem
+        elems = sorted(elems, key=lambda el: 0 if el in view.selection else 1)
+        return next(iter(elems), None)
 
     def whats_at_mouse_coords(*_):
         if not mouse_coords:
@@ -56,12 +60,6 @@ def make(eb, view, Canvas_Down, Canvas_Up, Canvas_Move, Tool_Done):
             return 'sel'
         else:
             return 'unsel'
-
-    hover_choice = Choice({
-        'bg': 'combo_over_background',
-        'sel': 'combo_over_selected_element',
-        'unsel': 'combo_over_unselected_element',
-    }, key=whats_at_mouse_coords, default='combo_over_background')
 
     def select_elem_under_cursor(evt, hsm):
         view.selection = [elem_at(evt.x, evt.y)]
@@ -83,7 +81,7 @@ def make(eb, view, Canvas_Down, Canvas_Up, Canvas_Move, Tool_Done):
         x, y = mouse_coords
         dx, dy = evt.x - x, evt.y - y
         moved = [el.move(dx, dy) for el in view.selection]
-        view.draw_once(moved)
+        view.draw_once = moved
 
     def commit_real_move(evt, hsm):
         x, y = mouse_coords
@@ -93,7 +91,7 @@ def make(eb, view, Canvas_Down, Canvas_Up, Canvas_Move, Tool_Done):
         changes = [model.Modify(el, el.move(dx, dy)) for el in view.selection]
         _log.info('about to commit {0} elems, moved by {1} x {2} px'.format(
             len(changes), dx, dy))
-        eb.dispatch(Commit_To_Model(changes))
+        model_commit(changes)
 
     def select_overlapped_elements(evt, hsm):
         assert view.marquee is not None
@@ -107,7 +105,12 @@ def make(eb, view, Canvas_Down, Canvas_Up, Canvas_Move, Tool_Done):
 
     trans = {
         'combo_idle': {
-            Initial: hover_choice,
+            Initial: Choice({
+                'bg': 'combo_over_background',
+                'sel': 'combo_over_selected_element',
+                'unsel': 'combo_over_unselected_element',
+            }, key=whats_at_mouse_coords, default='combo_over_background'),
+
             Canvas_Move: T('combo_idle', remember_mouse_coords),
         },
         'combo_engaged': {
@@ -116,9 +119,10 @@ def make(eb, view, Canvas_Down, Canvas_Up, Canvas_Move, Tool_Done):
         },
 
         'combo_over_background': {
-            Canvas_Down: T('combo_wait_for_drag_marquee', fseq(
+            Canvas_Down: T('combo_dragging_marquee', fseq(
                 deselect_all,
                 remember_mouse_coords,
+                set_marquee,
                 redraw_view)),
         },
         'combo_over_unselected_element': {
@@ -131,10 +135,6 @@ def make(eb, view, Canvas_Down, Canvas_Up, Canvas_Move, Tool_Done):
             Canvas_Down: T('combo_wait_for_drag_selection'),
         },
 
-        'combo_wait_for_drag_marquee': {
-            Canvas_Move: T('combo_dragging_marquee'),
-            Canvas_Up: Internal(dispatch_Tool_Done),  # nothing done, cancel
-        },
         'combo_dragging_marquee': {
             Canvas_Move: Internal(fseq(
                 set_marquee,

@@ -13,7 +13,7 @@ from . import path_tool, combo_tool, ellipse_tool
 
 
 
-def make(eventbus, model_query):
+def make(eventbus, canvas_model):
     """
         Main function that creates the view instance wired up with HSM states
         and transitions that this function returns, which are ready to be used
@@ -28,11 +28,13 @@ def make(eventbus, model_query):
     class Canvas_Move(Mouse_Move): pass
     class Tool_Done(Event): pass
 
-    view = CanvasView(300, 300, model_query)
+    view = CanvasView(300, 300, canvas_model.query)
     view.mouseReleased = lambda evt: eventbus.dispatch(Canvas_Up(evt))
     view.mouseMoved = lambda evt: eventbus.dispatch(Canvas_Move(evt))
     view.mouseDragged = view.mouseMoved
     view.mousePressed = lambda evt: eventbus.dispatch(Canvas_Down(evt))
+    for el in canvas_model.elems:
+        view.add_elem(el)
 
     DEFAULT_TOOL = COMBO_TOOL
 
@@ -46,26 +48,29 @@ def make(eventbus, model_query):
 
 
     path_idle, path_engaged, path_trans = path_tool.make(
-        eventbus, view, Canvas_Down, Canvas_Up, Canvas_Move, Tool_Done)
+        eventbus, view, Canvas_Down, Canvas_Up, Canvas_Move, Tool_Done,
+        canvas_model.commit)
 
     combo_idle, combo_engaged, combo_trans = combo_tool.make(
-        eventbus, view, Canvas_Down, Canvas_Up, Canvas_Move, Tool_Done)
+        eventbus, view, Canvas_Down, Canvas_Up, Canvas_Move, Tool_Done,
+        canvas_model.commit)
 
     ellipse_idle, ellipse_engaged, ellipse_trans = ellipse_tool.make(
-        eventbus, view, Canvas_Down, Canvas_Up, Canvas_Move, Tool_Done)
+        eventbus, view, Canvas_Down, Canvas_Up, Canvas_Move, Tool_Done,
+        canvas_model.commit)
 
 
     states = {
         'top': S(on_enter=set_up, states={
             'idle': S(join_dicts(
-                ellipse_idle,
-                path_idle,
                 combo_idle,
+                path_idle,
+                ellipse_idle,
             )),
             'engaged': S(join_dicts(
-                ellipse_engaged,
-                path_engaged,
                 combo_engaged,
+                path_engaged,
+                ellipse_engaged,
             )),
         })
     }

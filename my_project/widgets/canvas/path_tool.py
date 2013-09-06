@@ -8,11 +8,11 @@ from hsmpy import Initial, T, Choice, Internal
 from ...app import S
 from ... import model
 from ...util import fseq
-from ...events import Commit_To_Model
 
 
 
-def make(eb, view, Canvas_Down, Canvas_Up, Canvas_Move, Tool_Done):
+def make(eb, view, Canvas_Down, Canvas_Up, Canvas_Move, Tool_Done,
+         model_commit):
     """
         Returns separate states dicts and trans dict for idle and engaged tool
         behaviors as a tuple:
@@ -39,13 +39,13 @@ def make(eb, view, Canvas_Down, Canvas_Up, Canvas_Move, Tool_Done):
         # is immutable
         path = model.Path(tuple(vertices))
         _log.info('about to commit path {0}'.format(path))
-        eb.dispatch(Commit_To_Model( [model.Insert(path)] ))
+        model_commit([model.Insert(path)])
         eb.dispatch(Tool_Done())
         vertices[:] = []  # clear
 
     def redraw_path(evt, hsm):
         path = model.Path(tuple(vertices))
-        view.draw_once([path])
+        view.draw_once = [path]
         view.repaint()
 
 

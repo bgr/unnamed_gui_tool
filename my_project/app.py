@@ -2,7 +2,7 @@ from java.awt import Color
 from javax.swing import JFrame, JButton, BoxLayout
 from javautils import invokeLater
 import widgets.canvas
-from model import CanvasModel
+from model import CanvasModel, Rectangle, Ellipse
 from events import Tool_Changed, PATH_TOOL, COMBO_TOOL, ELLIPSE_TOOL
 from hsmpy import HSM, EventBus, State, Initial, T
 import logging
@@ -49,13 +49,13 @@ class AppFrame(JFrame):
 @invokeLater
 def run():
     eventbus = EventBus()
-    model = CanvasModel(eventbus)
-    #model.elems = [Ellipse(20, 30, 40, 50), Rectangle(30, 40, 10, 20)]
+    canvas_model = CanvasModel(eventbus)
+    canvas_model.elems = [Ellipse(20, 30, 40, 50), Rectangle(30, 40, 10, 20)]
 
     cvs_view_1, cvs_states_1, cvs_trans_1 = widgets.canvas.make(eventbus,
-                                                                model.query)
+                                                                canvas_model)
     cvs_view_2, cvs_states_2, cvs_trans_2 = widgets.canvas.make(eventbus,
-                                                                model.query)
+                                                                canvas_model)
 
     app_states = {
         'top': {

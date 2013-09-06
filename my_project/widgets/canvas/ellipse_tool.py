@@ -1,18 +1,16 @@
 import logging
 _log = logging.getLogger(__name__)
 
-from javax.swing import SwingUtilities
-
-from hsmpy import Initial, T, Choice, Internal
+from hsmpy import Initial, T, Internal
 
 from ...app import S
 from ... import model
 from ...util import fseq
-from ...events import Commit_To_Model
 
 
 
-def make(eb, view, Canvas_Down, Canvas_Up, Canvas_Move, Tool_Done):
+def make(eb, view, Canvas_Down, Canvas_Up, Canvas_Move, Tool_Done,
+         model_commit):
 
     idle = {
         'ellipse_idle': S(),
@@ -33,7 +31,7 @@ def make(eb, view, Canvas_Down, Canvas_Up, Canvas_Move, Tool_Done):
 
     def update_dimensions(evt, _):
         x, y = temp_elem_data
-        view.draw_once([model.Ellipse(x, y, evt.x - x, evt.y - y)])
+        view.draw_once = [model.Ellipse(x, y, evt.x - x, evt.y - y)]
 
     def redraw_view(*_):
         view.repaint()
@@ -46,7 +44,7 @@ def make(eb, view, Canvas_Down, Canvas_Up, Canvas_Move, Tool_Done):
         else:
             el = model.Ellipse(x, y, w, h)
             _log.info('about to commit ellipse {0}'.format(el))
-            eb.dispatch(Commit_To_Model( [model.Insert(el)] ))
+            model_commit([model.Insert(el)])
         temp_elem_data[:] = []
 
     def dispatch_Tool_Done(*_):
