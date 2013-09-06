@@ -25,9 +25,8 @@ class CanvasView(JPanel):
         self._draw_once_elems = []
         self._selected = set([])
         self._marquee = None
+        self._transform = awt.geom.AffineTransform()
         self._zoom = 1
-        self._pan_x = 0
-        self._pan_y = 0
 
 
     def add_elem(self, elem, repaint=False):
@@ -107,35 +106,36 @@ class CanvasView(JPanel):
 
     @property
     def zoom(self):
-        return self._zoom
-
-    @zoom.setter
-    def zoom(self, value):
-        self._zoom = float(value)
+        return self._transform.getScaleX()
 
     @property
     def pan_x(self):
-        return self._pan_x
+        return self._transform.getTranslateX()
 
     @property
     def pan_y(self):
-        return self._pan_y
+        return self._transform.getTranslateY()
 
-    def pan(self, h, v):
-        self._pan_x += h
-        self._pan_y += v
+
+    def zoom_by(self, value):
+        self._transform.scale(value, value)
+
+    def pan_by(self, h, v):
+        self._transform.translate(h / self.zoom, v / self.zoom)
+
+    def transformed(self, x, y):
+        return ((x - self.pan_x) / self.zoom, (y - self.pan_y) / self.zoom)
 
 
     def paintComponent(self, g):
         # TODO: repaint only changed regions
         g.color = self.background
         g.fillRect(0, 0, self.width, self.height)
-        old_trans = g.getTransform()
 
-        trans = old_trans.clone()
-        trans.translate(self._pan_x, self._pan_y)
-        trans.scale(self._zoom, self._zoom)
-        g.setTransform(trans)
+        old_trans = g.getTransform().clone()
+        new_trans = old_trans.clone()
+        new_trans.concatenate(self._transform)
+        g.setTransform(new_trans)
 
         for el in self._elems + self._draw_once_elems:
             g.color = SELECTED_COLOR if el in self._selected else STROKE_COLOR
@@ -150,10 +150,8 @@ class CanvasView(JPanel):
             g.drawRect(x1, y1, x2 - x1, y2 - y1)
 
 
-
     def elements_at(self, x, y):
-        x = (x - self._pan_x) / self._zoom
-        y = (y - self._pan_y) / self._zoom
+        x, y = self.transformed(x, y)
         elems = self.query.under(x, y)  # coarse, checks against bounding boxes
 
         def check(el):  # precise, checks using java.awt.Shape
@@ -168,10 +166,8 @@ class CanvasView(JPanel):
         return [el for el in elems if check(el)]
 
     def elements_overlapping(self, x1, y1, x2, y2):
-        x1 = (x1 - self._pan_x) / self._zoom
-        x2 = (x2 - self._pan_x) / self._zoom
-        y1 = (y1 - self._pan_y) / self._zoom
-        y2 = (y2 - self._pan_y) / self._zoom
+        x1, y1 = self.transformed(x1, y1)
+        x2, y2 = self.transformed(x2, y2)
         elems = self.query.overlapped(x1, y1, x2, y2)
 
         def check(el):

@@ -25,16 +25,13 @@ def make(eb, view, event_pack, model_commit):
     # temporary holder objects used while the path is still being drawn
     vertices = []
 
-    def transformed(x, y):
-        return ((x - view.pan_x) / view.zoom, (y - view.pan_y) / view.zoom)
-
     def add_vertex(evt, hsm):
-        vertices.append( transformed(evt.x, evt.y) )
+        vertices.append( view.transformed(evt.x, evt.y) )
         _log.info('added vertex {0}, all: {1}'.format(vertices[-1], vertices))
         # TODO: make sure that no two successive vertices have same coords
 
     def update_last_segment(evt, hsm):
-        vertices[-1] = transformed(evt.x, evt.y)
+        vertices[-1] = view.transformed(evt.x, evt.y)
 
     def commit_and_finish(hsm):
         # work around "TypeError: unhashable type list" that arrises in

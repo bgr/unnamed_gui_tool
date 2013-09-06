@@ -15,7 +15,7 @@ from CanvasView import CanvasView
 from . import path_tool, combo_tool, ellipse_tool
 
 
-ZOOM_STEP = 0.1
+ZOOM_IN_FACTOR = 1.15
 
 
 def make(eventbus, canvas_model):
@@ -116,10 +116,12 @@ def make(eventbus, canvas_model):
         return hsm.data.canvas_tool or DEFAULT_TOOL
 
     def zoom_view(evt, _):
+        #vx, vy = view.transformed(evt.x, evt.y)
+        #view.pan_by(-vx, -vy)
         if evt.wheelRotation > 0:
-            view.zoom *= (1 - ZOOM_STEP)
+            view.zoom_by(1.0 / ZOOM_IN_FACTOR)
         else:
-            view.zoom /= (1 - ZOOM_STEP)
+            view.zoom_by(ZOOM_IN_FACTOR)
 
     prev_cursor_pos = []
 
@@ -128,7 +130,7 @@ def make(eventbus, canvas_model):
 
     def pan_view(evt, _):
         x, y = prev_cursor_pos
-        view.pan(evt.x - x, evt.y - y)
+        view.pan_by(evt.x - x, evt.y - y)
         prev_cursor_pos[:] = [evt.x, evt.y]
 
 
