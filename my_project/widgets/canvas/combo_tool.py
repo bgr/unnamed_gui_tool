@@ -19,10 +19,6 @@ def make(eb, view, Canvas_Down, Canvas_Up, Canvas_Move, Tool_Done):
         joining, performed in widgets.canvas.main.make function.
     """
 
-    def clear_marquee(hsm):
-        view.marquee = None
-        view.repaint()
-
 
     idle = {
         'combo_idle': S({
@@ -34,7 +30,8 @@ def make(eb, view, Canvas_Down, Canvas_Up, Canvas_Move, Tool_Done):
 
     engaged = {
         'combo_engaged': S({
-            'combo_dragging_marquee': S(on_exit=clear_marquee),
+            'combo_wait_for_drag_marquee': S(),
+            'combo_dragging_marquee': S(),
             'combo_wait_for_drag_selection': S(),
             'combo_dragging_selection': S(),
         }),
@@ -49,7 +46,7 @@ def make(eb, view, Canvas_Down, Canvas_Up, Canvas_Move, Tool_Done):
     def elem_at(x, y):
         return next(iter(view.elements_at(x, y)), None)
 
-    def whats_at_mouse_coords(*_, **__):
+    def whats_at_mouse_coords(*_):
         if not mouse_coords:
             return 'bg'
         el = elem_at(*mouse_coords)
@@ -69,14 +66,17 @@ def make(eb, view, Canvas_Down, Canvas_Up, Canvas_Move, Tool_Done):
     def select_elem_under_cursor(evt, hsm):
         view.selection = [elem_at(evt.x, evt.y)]
 
-    def deselect_all(*_, **__):
+    def deselect_all(*_):
         view.selection = []
 
-    def set_marquee(evt, hsm):
+    def set_marquee(evt, _):
         x, y = mouse_coords
         view.marquee = (x, y, evt.x, evt.y)
 
-    def redraw_view(*_, **__):
+    def clear_marquee(*_):
+        view.marquee = None
+
+    def redraw_view(*_):
         view.repaint()
 
     def simulate_fake_move(evt, hsm):
@@ -95,8 +95,14 @@ def make(eb, view, Canvas_Down, Canvas_Up, Canvas_Move, Tool_Done):
             len(changes), dx, dy))
         eb.dispatch(Commit_To_Model(changes))
 
+    def select_overlapped_elements(evt, hsm):
+        assert view.marquee is not None
+        elems = view.elements_overlapping(*view.marquee)
+        _log.info('marquee overlapped {0} elements'.format(len(elems)))
+        view.selection = elems
 
-    dispatch_Tool_Done = lambda *_, **__: eb.dispatch(Tool_Done())
+    def dispatch_Tool_Done(*_):
+        eb.dispatch(Tool_Done())
 
 
     trans = {
@@ -110,31 +116,40 @@ def make(eb, view, Canvas_Down, Canvas_Up, Canvas_Move, Tool_Done):
         },
 
         'combo_over_background': {
-            Canvas_Down: T('combo_dragging_marquee', fseq(
+            Canvas_Down: T('combo_wait_for_drag_marquee', fseq(
                 deselect_all,
-                remember_mouse_coords)),
+                remember_mouse_coords,
+                redraw_view)),
         },
         'combo_over_unselected_element': {
             Canvas_Down: T('combo_wait_for_drag_selection', fseq(
                 select_elem_under_cursor,
+                remember_mouse_coords,
                 redraw_view)),
         },
         'combo_over_selected_element': {
             Canvas_Down: T('combo_wait_for_drag_selection'),
         },
 
+        'combo_wait_for_drag_marquee': {
+            Canvas_Move: T('combo_dragging_marquee'),
+            Canvas_Up: Internal(dispatch_Tool_Done),  # nothing done, cancel
+        },
         'combo_dragging_marquee': {
             Canvas_Move: Internal(fseq(
                 set_marquee,
                 redraw_view)),
-            Canvas_Up: Internal(dispatch_Tool_Done),
+            Canvas_Up: Internal(fseq(
+                select_overlapped_elements,
+                clear_marquee,
+                redraw_view,
+                dispatch_Tool_Done)),
         },
 
         'combo_wait_for_drag_selection': {
-            Canvas_Move: T('combo_dragging_selection', remember_mouse_coords),
+            Canvas_Move: T('combo_dragging_selection'),
             Canvas_Up: Internal(dispatch_Tool_Done),  # nothing done, cancel
         },
-
         'combo_dragging_selection': {
             Canvas_Move: Internal(fseq(
                 simulate_fake_move,

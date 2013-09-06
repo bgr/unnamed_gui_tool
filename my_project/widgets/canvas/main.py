@@ -70,9 +70,12 @@ def make(eventbus, model_query):
         })
     }
 
+    def update_view(evt, _):
+        view.apply_changes(evt.data)
+        view.repaint()
 
-    update_view = lambda evt, _: view.draw_changes(evt.data)
-    get_tool = lambda _, hsm: hsm.data.canvas_tool or DEFAULT_TOOL
+    def get_tool(_, hsm):
+        return hsm.data.canvas_tool or DEFAULT_TOOL
 
 
     trans = join_dicts(

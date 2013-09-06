@@ -69,35 +69,42 @@ class CanvasView(JPanel):
         if rect_tuple is None:
             self._marquee = None
             return
-        x, y, x2, y2 = rect_tuple
-        if x2 < x:
-            x, x2 = x2, x
-        if y2 < y:
-            y, y2 = y2, y
-        self._marquee = (x, y, x2 - x, y2 - y)
+        x1, y1, x2, y2 = rect_tuple
+        if x2 < x1:
+            x1, x2 = x2, x1
+        if y2 < y1:
+            y1, y2 = y2, y1
+        self._marquee = (x1, y1, x2, y2)
 
 
-    def draw_changes(self, changes):
+    def apply_changes(self, changes):
+        def insert(ch):
+            self.add_elem(ch.elem, repaint=False)
+
+        def remove(ch):
+            self.remove_elem(ch.elem, repaint=False)
+            if ch.elem in self._selected:
+                self._selected.remove(ch.elem)
+
+        def modify(ch):
+            self.remove_elem(ch.elem, repaint=False)
+            self.add_elem(ch.modified, repaint=False)
+            if ch.elem in self._selected:
+                self._selected.remove(ch.elem)
+                self._selected.add(ch.modified)
+
         switch = {
-            model.Insert: lambda ch: self.add_elem(ch.elem, repaint=False),
-            model.Remove: lambda ch: self.remove_elem(ch.elem, repaint=False),
-            model.Modify: fseq(
-                lambda ch: self.remove_elem(ch.elem, repaint=False),
-                lambda ch: self.add_elem(ch.modified, repaint=False),
-            ),
+            model.Insert: insert,
+            model.Remove: remove,
+            model.Modify: modify,
         }
+
         for ch in changes:
             switch[ch.__class__](ch)
-        self.repaint()
 
 
     def draw_once(self, elems):
         self._draw_once_elems += elems
-
-
-    def draw_marquee(self, x, y, w, h):
-        marquee = model.Rectangle(x, y, w, h)
-        self._draw_once_elems.append(marquee)
 
 
     def paintComponent(self, g):
@@ -113,13 +120,14 @@ class CanvasView(JPanel):
 
         if self._marquee:
             g.color = MARQUEE_COLOR
-            g.drawRect(*self._marquee)
+            x1, y1, x2, y2 = self.marquee
+            g.drawRect(x1, y1, x2 - x1, y2 - y1)
 
 
     def elements_at(self, x, y):
         elems = self.query.under(x, y)  # coarse, checks against bounding boxes
 
-        def contains(el, x, y):  # precise, checks using java.awt.Shape
+        def check(el):  # precise, checks using java.awt.Shape
             sh = shape(el)
             if isinstance(el, model.Path):
                 # have to check against the stroke since Java's path is
@@ -127,7 +135,18 @@ class CanvasView(JPanel):
                 sh = awt.BasicStroke(4).createStrokedShape(sh)
             return sh.contains(x, y)
 
-        return [el for el in elems if contains(el, x, y)]
+        return [el for el in elems if check(el)]
+
+    def elements_overlapping(self, x1, y1, x2, y2):
+        elems = self.query.overlapped(x1, y1, x2, y2)
+
+        def check(el):
+            sh = shape(el)
+            if isinstance(el, model.Path):
+                sh = awt.BasicStroke(4).createStrokedShape(sh)
+            return sh.intersects(x1, y1, x2 - x1, y2 - y1)
+
+        return [el for el in elems if check(el)]
 
 
 
