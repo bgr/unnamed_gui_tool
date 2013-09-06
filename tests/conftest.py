@@ -9,7 +9,7 @@ import os
 cur_path = os.path.abspath(__file__)
 project_root = os.path.abspath(os.path.join(cur_path, os.pardir, os.pardir))
 
-submodule_dirs = ['hsmpy', 'quadpy', 'sympy']
+submodule_dirs = ['hsmpy', 'quadpy']
 
 for dirname in submodule_dirs:
     path = os.path.join(project_root, 'submodules', dirname)
