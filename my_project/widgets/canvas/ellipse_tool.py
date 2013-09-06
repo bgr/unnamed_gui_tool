@@ -9,8 +9,10 @@ from ...util import fseq
 
 
 
-def make(eb, view, Canvas_Down, Canvas_Up, Canvas_Move, Tool_Done,
-         model_commit):
+def make(eb, view, event_pack, model_commit):
+    (Canvas_Down, Canvas_Up, Canvas_Right_Down, Canvas_Right_Up,
+     Canvas_Middle_Down, Canvas_Middle_Up, Canvas_Move, Canvas_Wheel,
+     Tool_Done) = event_pack
 
     idle = {
         'ellipse_idle': S(),

@@ -25,6 +25,9 @@ class CanvasView(JPanel):
         self._draw_once_elems = []
         self._selected = set([])
         self._marquee = None
+        self._zoom = 1
+        self._pan_x = 0
+        self._pan_y = 0
 
 
     def add_elem(self, elem, repaint=False):
@@ -102,21 +105,43 @@ class CanvasView(JPanel):
         self._draw_once_elems = list(elems)
 
 
+    @property
+    def zoom(self):
+        return self._zoom
+
+    @zoom.setter
+    def zoom(self, value):
+        self._zoom = float(value)
+
+
+    def pan(self, h, v):
+        self._pan_x += h
+        self._pan_y += v
+
+
     def paintComponent(self, g):
         # TODO: repaint only changed regions
         g.color = self.background
         g.fillRect(0, 0, self.width, self.height)
+        old_trans = g.getTransform()
+
+        trans = old_trans.clone()
+        trans.translate(self._pan_x, self._pan_y)
+        trans.scale(self._zoom, self._zoom)
+        g.setTransform(trans)
 
         for el in self._elems + self._draw_once_elems:
             g.color = SELECTED_COLOR if el in self._selected else STROKE_COLOR
             g.draw(shape(el))
 
         self._draw_once_elems = []
+        g.setTransform(old_trans)
 
         if self._marquee:
             g.color = MARQUEE_COLOR
             x1, y1, x2, y2 = self.marquee
             g.drawRect(x1, y1, x2 - x1, y2 - y1)
+
 
 
     def elements_at(self, x, y):

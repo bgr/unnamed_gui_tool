@@ -1,16 +1,21 @@
 import logging
 _log = logging.getLogger(__name__)
 
+from javax.swing import SwingUtilities as SwU
+
 from hsmpy import Event, Initial, T, Internal, Choice
+
 from ...app import S
-from ...util import join_dicts
-from ...events import (Mouse_Down, Mouse_Up, Mouse_Move, Tool_Changed,
-                       Model_Changed, PATH_TOOL, COMBO_TOOL, ELLIPSE_TOOL)
+from ...util import join_dicts, fseq
+from ...events import (WrappedEvent, Tool_Changed, Model_Changed,
+                       PATH_TOOL, COMBO_TOOL, ELLIPSE_TOOL)
 from CanvasView import CanvasView
 
 # tool behaviors are defined using sub-HSMs in separate modules:
 from . import path_tool, combo_tool, ellipse_tool
 
+
+ZOOM_STEP = 0.1
 
 
 def make(eventbus, canvas_model):
@@ -23,16 +28,41 @@ def make(eventbus, canvas_model):
     # declaring events here in order to make sure that each view-controller
     # pair has their own unique events, to prevent one controller responding
     # to other's view's events
-    class Canvas_Down(Mouse_Down): pass
-    class Canvas_Up(Mouse_Up): pass
-    class Canvas_Move(Mouse_Move): pass
+    class Canvas_Down(WrappedEvent): pass
+    class Canvas_Up(WrappedEvent): pass
+    class Canvas_Right_Down(WrappedEvent): pass
+    class Canvas_Right_Up(WrappedEvent): pass
+    class Canvas_Middle_Down(WrappedEvent): pass
+    class Canvas_Middle_Up(WrappedEvent): pass
+    class Canvas_Move(WrappedEvent): pass
+    class Canvas_Wheel(WrappedEvent): pass
     class Tool_Done(Event): pass
 
+    def make_dispatcher(up_or_down):
+        clsmap = {
+            ('down', 1): Canvas_Down,
+            ('down', 2): Canvas_Middle_Down,
+            ('down', 3): Canvas_Right_Down,
+            ('up', 1): Canvas_Up,
+            ('up', 2): Canvas_Middle_Up,
+            ('up', 3): Canvas_Right_Up,
+        }
+
+        def dispatcher(evt):
+            Cls = clsmap.get( (up_or_down, evt.button) )
+            if Cls:
+                eventbus.dispatch(Cls(evt))
+
+        return dispatcher
+
+
     view = CanvasView(300, 300, canvas_model.query)
-    view.mouseReleased = lambda evt: eventbus.dispatch(Canvas_Up(evt))
+    view.mousePressed = make_dispatcher('down')
+    view.mouseReleased = make_dispatcher('up')
     view.mouseMoved = lambda evt: eventbus.dispatch(Canvas_Move(evt))
     view.mouseDragged = view.mouseMoved
-    view.mousePressed = lambda evt: eventbus.dispatch(Canvas_Down(evt))
+    view.mouseWheelMoved = lambda evt: eventbus.dispatch(Canvas_Wheel(evt))
+
     for el in canvas_model.elems:
         view.add_elem(el)
 
@@ -46,18 +76,18 @@ def make(eventbus, canvas_model):
         hsm.data.canvas_tool = evt.data
         _log.info('remembered selected tool {0}'.format(hsm.data.canvas_tool))
 
+    event_pack = [Canvas_Down, Canvas_Up, Canvas_Right_Down, Canvas_Right_Up,
+                  Canvas_Middle_Down, Canvas_Middle_Up, Canvas_Move,
+                  Canvas_Wheel, Tool_Done]
 
     path_idle, path_engaged, path_trans = path_tool.make(
-        eventbus, view, Canvas_Down, Canvas_Up, Canvas_Move, Tool_Done,
-        canvas_model.commit)
+        eventbus, view, event_pack, canvas_model.commit)
 
     combo_idle, combo_engaged, combo_trans = combo_tool.make(
-        eventbus, view, Canvas_Down, Canvas_Up, Canvas_Move, Tool_Done,
-        canvas_model.commit)
+        eventbus, view, event_pack, canvas_model.commit)
 
     ellipse_idle, ellipse_engaged, ellipse_trans = ellipse_tool.make(
-        eventbus, view, Canvas_Down, Canvas_Up, Canvas_Move, Tool_Done,
-        canvas_model.commit)
+        eventbus, view, event_pack, canvas_model.commit)
 
 
     states = {
@@ -72,15 +102,34 @@ def make(eventbus, canvas_model):
                 path_engaged,
                 ellipse_engaged,
             )),
+            'panning': S(),
         })
     }
 
-    def update_view(evt, _):
+    def update_view_with_changes(evt, _):
         view.apply_changes(evt.data)
+
+    def redraw_view(*_):
         view.repaint()
 
     def get_tool(_, hsm):
         return hsm.data.canvas_tool or DEFAULT_TOOL
+
+    def zoom_view(evt, _):
+        if evt.wheelRotation > 0:
+            view.zoom *= (1 - ZOOM_STEP)
+        else:
+            view.zoom /= (1 - ZOOM_STEP)
+
+    prev_cursor_pos = []
+
+    def remember_cursor_pos(evt, _):
+        prev_cursor_pos[:] = [evt.x, evt.y]
+
+    def pan_view(evt, _):
+        x, y = prev_cursor_pos
+        view.pan(evt.x - x, evt.y - y)
+        prev_cursor_pos[:] = [evt.x, evt.y]
 
 
     trans = join_dicts(
@@ -90,7 +139,12 @@ def make(eventbus, canvas_model):
         {
             'top': {
                 Initial: T('idle'),
-                Model_Changed: Internal(action=update_view),
+                Model_Changed: Internal(fseq(
+                    update_view_with_changes,
+                    redraw_view)),
+                Canvas_Wheel: Internal(fseq(
+                    zoom_view,
+                    redraw_view)),
             },
             'idle': {
                 Initial: Choice(
@@ -104,15 +158,22 @@ def make(eventbus, canvas_model):
                     default='combo_idle',
                     key=get_tool),
                 # tool is idle, safe to change to another tool by reentering
-                Tool_Changed: T('idle', action=remember_selected_tool),
+                Tool_Changed: T('idle', remember_selected_tool),
+                Canvas_Middle_Down: T('panning', remember_cursor_pos),
             },
             'engaged': {
                 # should never be called since substates are always
                 # transitioned to directly
                 Initial: T('combo_engaged', action=lambda _, __: 1 / 0),
                 # tool is engaged, remember new tool for later, don't change
-                Tool_Changed: Internal(action=remember_selected_tool),
+                Tool_Changed: Internal(remember_selected_tool),
                 Tool_Done: T('idle'),
+            },
+            'panning': {
+                Canvas_Move: Internal(fseq(
+                    pan_view,
+                    redraw_view)),
+                Canvas_Middle_Up: T('idle'),
             },
         }
     )
