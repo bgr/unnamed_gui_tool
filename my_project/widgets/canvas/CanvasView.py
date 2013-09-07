@@ -26,7 +26,6 @@ class CanvasView(JPanel):
         self._selected = set([])
         self._marquee = None
         self._transform = awt.geom.AffineTransform()
-        self._zoom = 1
 
 
     def add_elem(self, elem, repaint=False):
@@ -120,8 +119,9 @@ class CanvasView(JPanel):
     def zoom_by(self, value):
         self._transform.scale(value, value)
 
-    def pan_by(self, h, v):
-        self._transform.translate(h / self.zoom, v / self.zoom)
+    def pan_by(self, h, v, zoom=True):
+        z = self.zoom if zoom else 1
+        self._transform.translate(h / z, v / z)
 
     def transformed(self, x, y):
         return ((x - self.pan_x) / self.zoom, (y - self.pan_y) / self.zoom)
@@ -159,7 +159,7 @@ class CanvasView(JPanel):
             if isinstance(el, model.Path):
                 # have to check against the stroke since Java's path is
                 # implicitly closed and behaves like a polygon
-                stroke_width = LINE_STROKE_WIDTH / self._zoom
+                stroke_width = LINE_STROKE_WIDTH / self.zoom
                 sh = awt.BasicStroke(stroke_width).createStrokedShape(sh)
             return sh.contains(x, y)
 
@@ -173,7 +173,7 @@ class CanvasView(JPanel):
         def check(el):
             sh = shape(el)
             if isinstance(el, model.Path):
-                stroke_width = LINE_STROKE_WIDTH / self._zoom
+                stroke_width = LINE_STROKE_WIDTH / self.zoom
                 sh = awt.BasicStroke(stroke_width).createStrokedShape(sh)
             return sh.intersects(x1, y1, x2 - x1, y2 - y1)
 

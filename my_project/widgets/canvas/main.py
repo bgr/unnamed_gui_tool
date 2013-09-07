@@ -116,12 +116,14 @@ def make(eventbus, canvas_model):
         return hsm.data.canvas_tool or DEFAULT_TOOL
 
     def zoom_view(evt, _):
-        #vx, vy = view.transformed(evt.x, evt.y)
-        #view.pan_by(-vx, -vy)
+        vx1, vy1 = view.transformed(evt.x, evt.y)
         if evt.wheelRotation > 0:
             view.zoom_by(1.0 / ZOOM_IN_FACTOR)
         else:
             view.zoom_by(ZOOM_IN_FACTOR)
+        vx2, vy2 = view.transformed(evt.x, evt.y)
+        # pan the view so that mouse cursor position is the zoom center point
+        view.pan_by(vx2 - vx1, vy2 - vy1, zoom=False)
 
     prev_cursor_pos = []
 
