@@ -4,9 +4,12 @@ from javax.swing import JPanel
 from ... import model
 
 BACKGROUND_COLOR = awt.Color.WHITE
-STROKE_COLOR = awt.Color.BLACK
-MARQUEE_COLOR = awt.Color.BLUE
-SELECTED_COLOR = awt.Color.RED
+ELEMENT_STROKE_COLOR = awt.Color.BLACK
+ELEMENT_FILL_COLOR = awt.Color(200, 200, 200, 40)
+SELECTED_STROKE_COLOR = awt.Color.RED
+SELECTED_FILL_COLOR = ELEMENT_FILL_COLOR
+MARQUEE_STROKE_COLOR = awt.Color.BLUE
+MARQUEE_FILL_COLOR = awt.Color(100, 100, 255, 40)
 
 LINE_STROKE_WIDTH = 9
 
@@ -132,21 +135,35 @@ class CanvasView(JPanel):
         g.color = self.background
         g.fillRect(0, 0, self.width, self.height)
 
+        g.setRenderingHint(awt.RenderingHints.KEY_ANTIALIASING,
+                           awt.RenderingHints.VALUE_ANTIALIAS_ON)
+        g.setRenderingHint(awt.RenderingHints.KEY_TEXT_ANTIALIASING,
+                           awt.RenderingHints.VALUE_TEXT_ANTIALIAS_ON)
+
         old_trans = g.getTransform().clone()
         new_trans = old_trans.clone()
         new_trans.concatenate(self._transform)
         g.setTransform(new_trans)
 
         for el in self._elems + self._draw_once_elems:
-            g.color = SELECTED_COLOR if el in self._selected else STROKE_COLOR
-            g.draw(shape(el))
+            if el in self._selected:
+                stroke, fill = SELECTED_STROKE_COLOR, SELECTED_FILL_COLOR
+            else:
+                stroke, fill = ELEMENT_STROKE_COLOR, ELEMENT_FILL_COLOR
+            sh = shape(el)
+            g.color = fill
+            g.fill(sh) if not isinstance(el, model.Path) else None
+            g.color = stroke
+            g.draw(sh)
 
         self._draw_once_elems = []
         g.setTransform(old_trans)
 
         if self._marquee:
-            g.color = MARQUEE_COLOR
             x1, y1, x2, y2 = self.marquee
+            g.color = MARQUEE_FILL_COLOR
+            g.fillRect(x1, y1, x2 - x1, y2 - y1)
+            g.color = MARQUEE_STROKE_COLOR
             g.drawRect(x1, y1, x2 - x1, y2 - y1)
 
 
