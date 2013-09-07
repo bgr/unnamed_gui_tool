@@ -22,14 +22,13 @@ def invokeLater(func):
     return wrapped
 
 
-def make_button(icon_filename, action_cmd_str, tooltip_text, alt_text):
+def make_button(label, tooltip_text, icon_file_path=None):
     """Returns a JButton"""
     button = JButton()
-    button.actionCommand = action_cmd_str
+    button.actionCommand = label
     button.toolTipText = tooltip_text
-    if icon_filename:
-        button.icon = ImageIcon(icon_filename, alt_text)
+    if icon_file_path:
+        button.icon = ImageIcon(icon_file_path, tooltip_text.upper())
     else:
-        button.text = alt_text
-        print "Resource not found: " + icon_filename
+        button.text = label
     return button

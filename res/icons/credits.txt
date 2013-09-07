@@ -1,0 +1,3 @@
+Icons are taken from (or based on) icons from the following sources:
+  * Tango Icon Library - http://tango.freedesktop.org/Tango_Icon_Library
+  * GIMP source files - http://www.gimp.org/

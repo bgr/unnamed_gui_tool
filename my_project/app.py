@@ -1,9 +1,8 @@
-from java.awt import Color
-from javax.swing import JFrame, JButton, BoxLayout
+from java.awt import Color, BorderLayout
+from javax.swing import JFrame, JPanel, BoxLayout
 from javautils import invokeLater
-import widgets.canvas
+import widgets
 from model import CanvasModel, Rectangle, Ellipse
-from events import Tool_Changed, PATH_TOOL, COMBO_TOOL, ELLIPSE_TOOL
 from hsmpy import HSM, EventBus, State, Initial, T
 import logging
 
@@ -33,17 +32,13 @@ class AppFrame(JFrame):
     def __init__(self, eventbus):
         super(self.__class__, self).__init__()
         self.title = "Canvases"
-        self.layout = BoxLayout(self.contentPane, BoxLayout.PAGE_AXIS)
+        # will use BorderLayout by default
         self.defaultCloseOperation = JFrame.EXIT_ON_CLOSE
         self.visible = True
 
-        def btn(tool_name):
-            return JButton(tool_name, actionPerformed=lambda evt:
-                           eventbus.dispatch(Tool_Changed(tool_name)))
+        toolbar, _, _ = widgets.tool_picker.make(eventbus)
+        self.add(toolbar, BorderLayout.NORTH)
 
-        self.add(btn(COMBO_TOOL))
-        self.add(btn(PATH_TOOL))
-        self.add(btn(ELLIPSE_TOOL))
 
 
 @invokeLater
@@ -77,9 +72,16 @@ def run():
     hsm.start(eventbus)
 
     app_frame = AppFrame(eventbus)
-    app_frame.add(cvs_view_1)
-    app_frame.add(cvs_view_2)
+
+    canvases = JPanel()
+    canvases.layout = BoxLayout(canvases, BoxLayout.PAGE_AXIS)
+
+    canvases.add(cvs_view_1)
+    canvases.add(cvs_view_2)
+    app_frame.add(canvases, BorderLayout.CENTER)
+
     cvs_view_2.background = Color.GRAY
+
     app_frame.size = (1100, 1000)
 
 

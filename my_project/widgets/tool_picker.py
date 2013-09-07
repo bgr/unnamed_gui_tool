@@ -1,15 +1,29 @@
-from hsmpy import Event, State, Initial
-from hsmpy import Transition as T
+#from hsmpy import Event, State, Initial, T
 from javax.swing import JToolBar
-from util import make_button
 
-from hsmpy.events import (Choose_Combo_Tool, Choose_Rectangle_Tool,
-                          Choose_Polyline_Tool)
-
+from ..javautils import make_button
+from ..events import Tool_Changed, COMBO_TOOL, PATH_TOOL, ELLIPSE_TOOL
 
 
-def make(eventbus):
-    view = _make_view(eventbus)
+
+def make(eb):
+    view = JToolBar("Tools")
+    btn_combo = make_button("Combo",
+                            "Select and move elements",
+                            "res/icons/combo-tool.png")
+    btn_path = make_button("Path",
+                           "Create new path element",
+                           "res/icons/link-tool.png")
+    btn_ellipse = make_button("Ellipse",
+                              "Create new ellipse element",
+                              "res/icons/document-new.png")  # TODO: change
+    view.add(btn_combo)
+    view.add(btn_path)
+    view.add(btn_ellipse)
+
+    btn_combo.mousePressed = lambda _: eb.dispatch(Tool_Changed(COMBO_TOOL))
+    btn_path.mousePressed = lambda _: eb.dispatch(Tool_Changed(PATH_TOOL))
+    btn_ellipse.mousePressed = lambda _: eb.dispatch(Tool_Changed(ELLIPSE_TOOL))
 
     states = {
     }
@@ -18,21 +32,3 @@ def make(eventbus):
     }
 
     return (view, states, trans)
-
-
-def _make_view(eventbus):
-    toolbar = JToolBar("Tools")
-    btn_combo = make_button("select.png", "Combo", "Combo tool", "Combo TOOL")
-    btn_rect = make_button("rect.png", "Rectangle", "Rectangle tool",
-                           "Rectangle TOOL")
-    btn_poly = make_button("poly.png", "Polyline", "Polyline tool",
-                           "Polyline TOOL")
-    toolbar.add(btn_combo)
-    toolbar.add(btn_rect)
-    toolbar.add(btn_poly)
-
-    btn_combo.mousePressed = lambda: eventbus.dispatch(Choose_Combo_Tool())
-    btn_rect.mousePressed = lambda: eventbus.dispatch(Choose_Rectangle_Tool())
-    btn_poly.mousePressed = lambda: eventbus.dispatch(Choose_Polyline_Tool())
-
-    return toolbar
