@@ -1,4 +1,4 @@
-from ..util import Record, bounding_box_around_points
+from ..util import Record, bounding_box_around_points, remove_duplicates
 
 
 
@@ -44,7 +44,9 @@ def fix_xywh(x, y, width, height):
 
 
 class _BaseElement(Record):
-    pass
+    def children(self):
+        """Declare '_children' key and override this method where needed."""
+        return tuple([])
 
     @property
     def bounds(self):
@@ -86,7 +88,11 @@ class Ellipse(_BaseElement):
 
 class Path(_BaseElement):
     keys = ('vertices',)
-    # TODO: prepare
+
+    @classmethod
+    def prepare(cls, vertices):
+        fixed_verts = tuple(remove_duplicates(vertices))
+        return {'vertices': fixed_verts }
 
     @property
     def bounds(self):
@@ -94,7 +100,3 @@ class Path(_BaseElement):
 
     def move(self, dx, dy):
         return Path(tuple((vx + dx, vy + dy) for vx, vy in self.vertices))
-
-
-#class Polygon(_BaseElement):
-    #keys = ('vertices',)

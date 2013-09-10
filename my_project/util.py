@@ -9,6 +9,14 @@ def duplicates(ls):
     return [el for el, n in collections.Counter(ls).items() if n > 1]
 
 
+def remove_duplicates(ls, key=lambda el: el):
+    """Returns new list with removed redundant elements, keeps order."""
+    seen = set()
+    add_to_seen = lambda elem: not seen.add(elem)  # always returns True
+    return [elem for elem in ls
+            if key(elem) not in seen and add_to_seen(key(elem))]
+
+
 def with_rest(ls):
     """Generator - yields tuples (element, all_other_elements)"""
     for i, el in enumerate(ls):
@@ -151,6 +159,9 @@ class Record(tuple):
                             ', '.join(missing)))
 
         vals = tuple([gathered[key] for key in cls.keys])  # order matters
+
+        # all values must be hashable
+        [hash(val) for val in vals]
 
         ret = super(Record, cls).__new__(cls, vals)
         return ret

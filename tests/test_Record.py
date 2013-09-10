@@ -124,6 +124,10 @@ class Test_inheritance:
             self.C(2, dc=3)
         assert 'Invalid' in err.value.message
 
+    def test_doesnt_accept_unhashable_values(self):
+        with pytest.raises(TypeError) as err:
+            self.C(a=2, bc=[])
+        assert "unhashable type: 'list'" in err.value
 
     @pytest.mark.parametrize('create', [
         lambda self: self.C(2),
