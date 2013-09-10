@@ -27,66 +27,105 @@ class Test_commit(object):
         self.eb = EventBus()
         self.eb.register(Model_Changed, on_change)
 
+    # insert
 
-    def test_commit(self):
+    def test_insert(self):
+        cl = [
+            Insert(R(10, 5, -5, 5)),  # fix
+            Insert(R(4, 4, 4, 4)),
+        ]
+        _commit(cl, self.changelog, self.eb, self.elems)
+        assert self.elems == [
+            R(1, 1, 10, 10),
+            R(2, 2, 20, 20),
+            R(3, 3, 30, 30),
+            R(5, 5, 5, 5),
+            R(4, 4, 4, 4),
+        ]
+
+    def test_received_event_after_insert(self):
+        assert self.counter == 1
+        assert len(self.received_events) == 1
+        assert isinstance(self.received_events[0], Model_Changed)
+
+    def test_event_data_contains_insert_changes(self):
+        assert self.received_events[0].data == [
+            Insert(R(5, 5, 5, 5)),
+            Insert(R(4, 4, 4, 4)),
+        ]
+
+    def test_changes_appended_to_changelog_after_insert(self):
+        assert self.changelog == [
+            ['some', 'old'],
+            ['changes', 'here'],
+            self.received_events[0].data,
+        ]
+
+    # modify
+
+    def test_modify(self):
+        cl = [
+            Modify(R(1, 1, 10, 10), R(100, 1100, 1000, -1000)),  # fix
+            Modify(R(5, 5, 5, 5), R(55, 5, 5, 5)),
+        ]
+        _commit(cl, self.changelog, self.eb, self.elems)
+        assert self.elems == [
+            R(100, 100, 1000, 1000),
+            R(2, 2, 20, 20),
+            R(3, 3, 30, 30),
+            R(55, 5, 5, 5),
+            R(4, 4, 4, 4),
+        ]
+
+    def test_received_event_after_modify(self):
+        assert self.counter == 2
+        assert len(self.received_events) == 2
+        assert isinstance(self.received_events[1], Model_Changed)
+
+    def test_event_data_contains_modify_changes(self):
+        assert self.received_events[1].data == [
+            Modify(R(1, 1, 10, 10), R(100, 100, 1000, 1000)),
+            Modify(R(5, 5, 5, 5), R(55, 5, 5, 5)),
+        ]
+
+    def test_changes_appended_to_changelog_after_modify(self):
+        assert self.changelog == [
+            ['some', 'old'],
+            ['changes', 'here'],
+            self.received_events[0].data,
+            self.received_events[1].data,
+        ]
+
+    # remove
+
+    def test_remove(self):
         cl = [
             Remove(R(3, 3, 30, 30)),
-            Insert(R(10, 5, -5, 5)),  # fix
-            Modify(R(1, 1, 10, 10), R(100, 1100, 1000, -1000)),  # fix
             Remove(R(2, 2, 20, 20)),
-            Insert(R(4, 4, 4, 4)),
         ]
-
         _commit(cl, self.changelog, self.eb, self.elems)
-
-    def test_elems_list_updated(self):
         assert self.elems == [
             R(100, 100, 1000, 1000),
-            R(5, 5, 5, 5),
+            R(55, 5, 5, 5),
             R(4, 4, 4, 4),
         ]
 
-    def test_received_event(self):
-        assert self.counter == 1
-        assert len(self.received_events) == 1
-        assert isinstance(self.received_events[0], Model_Changed)
+    def test_received_event_after_remove(self):
+        assert self.counter == 3
+        assert len(self.received_events) == 3
+        assert isinstance(self.received_events[2], Model_Changed)
 
-    def test_event_data_contains_fixed_and_ordered_changes(self):
-        assert self.received_events[0].data == [
+    def test_event_data_contains_remove_changes(self):
+        assert self.received_events[2].data == [
             Remove(R(3, 3, 30, 30)),
             Remove(R(2, 2, 20, 20)),
-            Modify(R(1, 1, 10, 10), R(100, 100, 1000, 1000)),
-            Insert(R(5, 5, 5, 5)),
-            Insert(R(4, 4, 4, 4)),
         ]
 
-    def test_changes_appended_to_changelog(self):
+    def test_changes_appended_to_changelog_after_remove(self):
         assert self.changelog == [
             ['some', 'old'],
             ['changes', 'here'],
             self.received_events[0].data,
-        ]
-
-    def test_doesnt_inform_when_empty_changelist(self):
-        _commit([], self.changelog, self.eb, self.elems)
-        # everything should be the same
-        assert self.elems == [
-            R(100, 100, 1000, 1000),
-            R(5, 5, 5, 5),
-            R(4, 4, 4, 4),
-        ]
-        assert self.counter == 1
-        assert len(self.received_events) == 1
-        assert isinstance(self.received_events[0], Model_Changed)
-        assert self.received_events[0].data == [
-            Remove(R(3, 3, 30, 30)),
-            Remove(R(2, 2, 20, 20)),
-            Modify(R(1, 1, 10, 10), R(100, 100, 1000, 1000)),
-            Insert(R(5, 5, 5, 5)),
-            Insert(R(4, 4, 4, 4)),
-        ]
-        assert self.changelog == [
-            ['some', 'old'],
-            ['changes', 'here'],
-            self.received_events[0].data,
+            self.received_events[1].data,
+            self.received_events[2].data,
         ]

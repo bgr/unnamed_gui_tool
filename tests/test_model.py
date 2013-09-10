@@ -15,18 +15,14 @@ class Test_CanvasModel(object):
             R(2, 2, 20, 20),
             R(3, 3, 30, 30),
         ]
+        self.changelist = [ Insert(R(4, 4, 40, 40)) ]  # used for commit later
+
         self.counter = 0
         self.received_events = []
 
         def on_change(event):
             self.counter += 1
             self.received_events += [event]
-
-        self.changelist = [  # used for commit
-            Insert(R(4, 4, 40, 40)),
-            Modify(R(3, 3, 30, 30), R(30, 30, 300, 300)),
-            Remove(R(2, 2, 20, 20)),
-        ]
 
         self.eb = EventBus()
         self.model = CanvasModel(self.eb)
@@ -77,16 +73,13 @@ class Test_CanvasModel(object):
     def test_commit_informs_listeners(self):
         assert self.counter == 2
         assert len(self.received_events) == 2
-        assert self.received_events[1].data == [
-            Remove(R(2, 2, 20, 20)),
-            Modify(R(3, 3, 30, 30), R(30, 30, 300, 300)),
-            Insert(R(4, 4, 40, 40)),
-        ]
+        assert self.received_events[1].data == [ Insert(R(4, 4, 40, 40)) ]
 
     def test_commit_updates_elems(self):
         assert self.model._elems == [
             R(1, 1, 10, 10),
-            R(30, 30, 300, 300),
+            R(2, 2, 20, 20),
+            R(3, 3, 30, 30),
             R(4, 4, 40, 40),
         ]
         assert self.model.elems == self.model._elems
@@ -99,20 +92,12 @@ class Test_CanvasModel(object):
                 Insert(R(3, 3, 30, 30)),
             ],
             [
-                Remove(R(2, 2, 20, 20)),
-                Modify(R(3, 3, 30, 30), R(30, 30, 300, 300)),
                 Insert(R(4, 4, 40, 40)),
             ]
         ]
 
-    def test_cant_inject_changes_to_changelog_through_commit_argument(self):
-        self.changelist[2] = 'abc'
-        self.changelist.pop(0)
-        assert self.received_events[1].data == [
-            Remove(R(2, 2, 20, 20)),
-            Modify(R(3, 3, 30, 30), R(30, 30, 300, 300)),
-            Insert(R(4, 4, 40, 40)),
-        ]
+    def test_modify_changes_in_changelog_through_commit_argument(self):
+        self.changelist[0] = 'abc'
         assert self.model._changelog == [
             [
                 Insert(R(1, 1, 10, 10)),
@@ -120,8 +105,20 @@ class Test_CanvasModel(object):
                 Insert(R(3, 3, 30, 30)),
             ],
             [
-                Remove(R(2, 2, 20, 20)),
-                Modify(R(3, 3, 30, 30), R(30, 30, 300, 300)),
                 Insert(R(4, 4, 40, 40)),
             ]
         ]
+
+        self.changelist.pop(0)
+        assert self.model._changelog == [
+            [
+                Insert(R(1, 1, 10, 10)),
+                Insert(R(2, 2, 20, 20)),
+                Insert(R(3, 3, 30, 30)),
+            ],
+            [
+                Insert(R(4, 4, 40, 40)),
+            ]
+        ]
+
+        assert self.received_events[1].data == [ Insert(R(4, 4, 40, 40)) ]

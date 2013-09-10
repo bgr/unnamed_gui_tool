@@ -52,8 +52,13 @@ def test_Rectangle_fixes_negative_both():
     assert el == Rectangle(-80, -10, 100, 40)
 
 
+# TODO: test real elements that will be used in final app
+# TODO: test element.move
+# TODO: test element.children for both container and simple elements
 
-# change elements: Insert, Modify and Remove
+
+
+# model changelist elements: Insert, Modify and Remove
 
 R = Rectangle
 

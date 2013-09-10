@@ -3,7 +3,7 @@ _log = logging.getLogger(__name__)
 
 from ..util import duplicates
 from ..events import Model_Changed
-from elements import Remove, Insert, Modify, _BaseElement
+from elements import Remove, Insert, Modify, _BaseElement, Link
 from query import CanvasSimpleQuery as CanvasQuery
 
 
@@ -40,6 +40,9 @@ class CanvasModel(object):
         self.commit(old_changes + new_changes)
 
     def commit(self, changes):
+        _log.info('Model got changelist {0}'.format(
+            ''.join(['\n * ' + str(ch) for ch in changes])))
+
         _commit(changes, self._changelog, self._eb, self._elems)
 
     @property
@@ -51,37 +54,41 @@ class CanvasModel(object):
 
 def _commit(changes, changelog, eb, elems):
     """Performs the changes to model's elements and informs listeners."""
-    _log.info('Model got changelist {0}'.format(
-        ''.join(['\n * ' + str(ch) for ch in changes])))
+    validate(changes, elems)
 
-    if not changes:  # ignore empty changelist
-        return
+    for ch in changes:
+        if isinstance(ch, Remove):
+            elems.remove(ch.elem)
+        elif isinstance(ch, Insert):
+            elems += [ch.elem]
+        elif isinstance(ch, Modify):
+            old, new = ch
+            elems[elems.index(old)] = new
+        else:
+            assert False, "this cannot happen"
 
-    parsed = _parse(changes, elems)
-    to_remove, to_change, to_insert = parsed
-
-    for ch in to_remove:
-        elems.remove(ch.elem)
-
-    for old, new in to_change:
-        elems[elems.index(old)] = new
-
-    elems += [ch.elem for ch in to_insert]
-
-    log = to_remove + to_change + to_insert
     # changelog items are lists of changes, wrap in additional list
-    changelog += [log]
-    eb.dispatch(Model_Changed(log))
+    changelog += [changes[:]]
+    eb.dispatch(Model_Changed(changes[:]))
 
 
 
-def _parse(changelist, existing):
+def validate(changelist, existing):
     """
-        Validates changes in changelist and returns tuple:
-            (validated_changelist, elems_to_remove, changed_elems, new_elems)
+        Validates changes in changelist. Raises ValueError if something's not
+        valid, otherwise returns None.
     """
+    if not changelist:
+        raise ValueError("Empty changelist")
+
     if not all(isinstance(c, (Modify, Remove, Insert)) for c in changelist):
         raise ValueError("Invalid changes in changelist")
+
+    cls = changelist[0].__class__
+    if not all(isinstance(c, cls) for c in changelist):
+        raise ValueError("Mixed change types not allowed in same changelist")
+
+    # TODO: simplify code below now that mixed changes are not allowed
 
     to_remove = filter(lambda ch: isinstance(ch, Remove), changelist)
     to_modify = filter(lambda ch: isinstance(ch, Modify), changelist)
@@ -95,6 +102,9 @@ def _parse(changelist, existing):
 
     # element have valid types at this point
     # now validate element values
+
+    if any(m.elem == m.modified for m in to_modify):
+        raise ValueError("Modifying without actual changes")
 
     elems_old = [m.elem for m in to_modify]
     elems_mod = [m.modified for m in to_modify]
@@ -124,9 +134,7 @@ def _parse(changelist, existing):
 
     if any(len(el.bounds) != 4 for el in elems_mod + elems_ins):
         raise ValueError("Elements with invalid bounds tuple")
-    if any(el.bounds[2:] == el.bounds[:2] for el in elems_mod + elems_ins):
+    if any(el.bounds[2:] == el.bounds[:2] for el in elems_mod + elems_ins
+           if not isinstance(el, Link)):  # TODO: remove this
         # (x1, y1) == (x2, y2) where bounds is tuple (x1, y1, x2, y2)
         raise ValueError("Elements with 0 dimensions")
-
-    # everything ok
-    return (to_remove, to_modify, to_insert)

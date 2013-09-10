@@ -100,3 +100,25 @@ class Path(_BaseElement):
 
     def move(self, dx, dy):
         return Path(tuple((vx + dx, vy + dy) for vx, vy in self.vertices))
+
+
+class Link(_BaseElement):
+    keys = ('a', 'b')
+
+    @classmethod
+    def prepare(cls, a, b):
+        assert isinstance(a, _BaseElement), "must be valid element"
+        assert isinstance(b, _BaseElement), "must be valid element"
+
+    @property
+    def bounds(self):
+        a_x1, a_y1, a_x2, a_y2 = self.a.bounds
+        b_x1, b_y1, b_x2, b_y2 = self.b.bounds
+        x1, y1 = (a_x1 + a_x2) / 2, (a_y1 + a_y2) / 2
+        x2, y2 = (b_x1 + b_x2) / 2, (b_y1 + b_y2) / 2
+        # currently start and end point to center of target elements
+        # TODO: also remove workaround in CanvasModel.validate
+        return bounding_box_around_points([(x1, y1), (x2, y2)])
+
+    def move(self, dx, dy):
+        return self  # can't move yet, TODO
