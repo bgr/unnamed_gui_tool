@@ -76,7 +76,8 @@ class RecordMeta(type):
             if '_keys' in argspec.args or '_frozen' in argspec.args:
                 raise TypeError("No cheating")
 
-            all_keys += argspec.args[1:]
+            for k in argspec.args[1:]:
+                all_keys.append(k) if k not in all_keys else ''
 
             # Override __init__ to freeze instance immediately after
             # user-defined __init__ has exited. If user's class doesn't have

@@ -276,7 +276,7 @@ class Test_grandchildren:
         with pytest.raises(TypeError):
             C(1)
 
-    def test_init_with_no_arguments_ok_if_sets_fields(self):
+    def test_child_init_with_no_arguments_set_manually(self):
         class C(self.B):
             def __init__(self):
                 self.a = 2
@@ -288,7 +288,7 @@ class Test_grandchildren:
         assert c.c == 4
         assert c._frozen
 
-    def test_init_with_no_arguments_ok_if_sets_fields_via_parent_init(self):
+    def test_child_init_with_no_arguments_set_via_parent_init(self):
         class C(self.B):
             def __init__(slf):
                 super(C, slf).__init__(2, 3, 4)
@@ -298,7 +298,7 @@ class Test_grandchildren:
         assert c.c == 4
         assert c._frozen
 
-    def test_init_can_declare_additional_fields(self):
+    def test_child_init_can_declare_additional_fields(self):
         class C(self.B):
             def __init__(slf, d, e=5):
                 slf.d = d
@@ -307,6 +307,16 @@ class Test_grandchildren:
         c = C(4)
         assert (c.a, c.b, c.c, c.d, c.e) == (1, 2, 3, 4, 5)
         assert c._frozen
+
+    def test_child_init_can_redeclare_parents_field(self):
+        class C(self.B):
+            def __init__(slf, d, c, e='E', a='A'):
+                slf.a, slf.c, slf.d, slf.e = a, c, d, e
+                slf.b = 'B'
+
+        print C._keys
+        c = C('D', 'C')
+        assert (c.a, c.b, c.c, c.d, c.e) == ('A', 'B', 'C', 'D', 'E')
 
     def test_raises_when_init_leaves_unassigned_parents_fields(self):
         class C(self.B):
@@ -344,8 +354,8 @@ class Test_grandchildren:
 
     def test_repr(self):
         class GrandChild(self.B):
-            def __init__(slf, d, foo=55):
+            def __init__(slf, d, a=55):
                 slf.d = d
-                slf.foo = foo
-                super(GrandChild, slf).__init__(1, 2)
-        assert str(GrandChild(4)) == 'GrandChild(a=1, b=2, c=3, d=4, foo=55)'
+                super(GrandChild, slf).__init__(a, 2)
+        # representation shows parent's keys first:
+        assert str(GrandChild(4)) == 'GrandChild(a=55, b=2, c=3, d=4)'
