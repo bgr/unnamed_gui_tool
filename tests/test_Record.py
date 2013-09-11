@@ -25,6 +25,27 @@ class Test_base_class:
         with pytest.raises(TypeError):
             r.replace(x=2)
 
+    def test_can_compare_with_another_Record(self):
+        assert Record() == Record()
+
+    def test_can_compare_with_empty_tuple(self):
+        assert Record() == ()
+        assert () == Record()
+
+    def test_comparing_with_other_stuff_gives_False(self):
+        assert Record() != (2,)
+        assert (2,) != Record()
+        assert Record() != 2
+        assert Record() != []
+        assert Record() != [3]
+
+    def test_repr(self):
+        class Child(Record):
+            def __init__(slf, d, foo=55):
+                slf.d = d
+                slf.foo = 55
+        assert str(Child(4)) == 'Child(d=4, foo=55)'
+
 
 class Test_inheritance:
     def test_without_init(self):
@@ -172,6 +193,60 @@ class Test_inheritance:
                 def __init__(self, **kwargs):
                     pass
 
+    def test_can_compare_with_another_of_same_type_single_field(self):
+        class B(Record):
+            def __init__(self, a):
+                self.a = a
+        assert B(2) == B(2)
+        assert B(2) != B(3)
+
+    def test_can_compare_with_tuple_single_field(self):
+        class B(Record):
+            def __init__(self, a):
+                self.a = a
+        assert B(2) == (2,)
+        assert (2,) == B(2)
+        assert B(3) != (2,)
+        assert (2,) != B(3)
+
+    def test_can_compare_with_another_of_same_type_multiple_fields(self):
+        class B(Record):
+            def __init__(self, a, b, c):
+                self.a, self.b, self.c = a, b, c
+        assert B(2, 3, 4) == B(2, 3, 4,)
+        assert B(3, 3, 4) != B(2, 3, 4,)
+
+    def test_can_compare_with_tuple_multiple_fields(self):
+        class B(Record):
+            def __init__(self, a, b, c):
+                self.a = a
+                self.b = b
+                self.c = c
+        assert B(2, 3, 4) == (2, 3, 4,)
+        assert (2, 3, 4) == B(2, 3, 4)
+        assert B(3, 3, 4) != (2, 3, 4,)
+        assert (2, 3, 4,) != B(3, 3, 4)
+
+    def test_comparing_with_different_type_gives_False(self):
+        class B(Record):
+            def __init__(self):
+                pass
+        assert B() != Record()
+        assert Record() != B()
+
+        class C(Record):
+            def __init__(self):
+                pass
+        assert B() != C()
+        assert C() != B()
+
+    def test_repr(self):
+        class Child(Record):
+            def __init__(slf, d, foo=55):
+                slf.d = d
+                slf.foo = 55
+        assert str(Child(4)) == 'Child(d=4, foo=55)'
+
 
 
 class Test_grandchildren:
@@ -251,6 +326,26 @@ class Test_grandchildren:
             C(3)
         assert 'all fields' in err.value.message
 
+    def test_comparing_considers_parent_fields(self):
+        class Foobar(self.B):
+            def __init__(slf, d, e=5):
+                slf.d = d
+                super(Foobar, slf).__init__(1, 2)
+                slf.e = e
 
+        assert Foobar(4) == (1, 2, 3, 4, 5)
+        assert Foobar(4) == Foobar(4)
+        assert Foobar(3) != (1, 2, 3, 4, 5)
+        assert Foobar(3) != Foobar(4)
 
-# TODO: __eq__
+        class FoobarChild(Foobar):
+            pass
+        assert Foobar(3) != FoobarChild(3)
+
+    def test_repr(self):
+        class GrandChild(self.B):
+            def __init__(slf, d, foo=55):
+                slf.d = d
+                slf.foo = foo
+                super(GrandChild, slf).__init__(1, 2)
+        assert str(GrandChild(4)) == 'GrandChild(a=1, b=2, c=3, d=4, foo=55)'

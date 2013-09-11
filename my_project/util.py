@@ -130,3 +130,15 @@ class Record(object):
         new_dict.update(kwargs)
         del new_dict['_frozen']
         return self.__class__(**new_dict)
+
+    def __eq__(self, other):
+        if isinstance(other, tuple):
+            return tuple(getattr(self, k) for k in self._keys) == other
+        elif type(other) == type(self):
+            return all(getattr(self, k) == getattr(other, k)
+                       for k in self._keys)
+        return False
+
+    def __repr__(self):
+        keyvals = ['{0}={1}'.format(k, getattr(self, k)) for k in self._keys]
+        return '{0}({1})'.format(self.__class__.__name__, ', '.join(keyvals))
