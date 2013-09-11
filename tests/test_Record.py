@@ -39,6 +39,9 @@ class Test_base_class:
         assert Record() != []
         assert Record() != [3]
 
+    def test_hash(self):
+        assert hash(Record()) == hash(Record())
+
     def test_repr(self):
         class Child(Record):
             def __init__(slf, d, foo=55):
@@ -240,6 +243,13 @@ class Test_inheritance:
         assert B() != C()
         assert C() != B()
 
+    def test_hash(self):
+        class B(Record):
+            def __init__(self, a, b, c):
+                self.a, self.b, self.c = a, b, c
+        assert hash(B(3, 4, 5)) == hash(B(3, 4, 5))
+        assert hash(B(3, 5, 4)) != hash(B(3, 4, 5))
+
     def test_repr(self):
         class Child(Record):
             def __init__(slf, d, foo=55):
@@ -351,6 +361,41 @@ class Test_grandchildren:
         class FoobarChild(Foobar):
             pass
         assert Foobar(3) != FoobarChild(3)
+
+    def test_hash(self):
+        class C(self.B):
+            def __init__(slf, d, a):
+                super(C, slf).__init__(a, 2, 3)
+                slf.d = d
+        assert hash(C(1, 4)) == hash(C(1, 4))
+        assert hash(C(4, 1)) != hash(C(1, 4))
+
+    def test_different_classes_with_same_fields_return_different_hash(self):
+        class C(self.B):
+            def __init__(slf, d=4, a=1):
+                super(C, slf).__init__(a, 2, 3)
+                slf.d = d
+
+        class D(C):
+            pass
+
+        class E(self.B):
+            def __init__(slf, d=4, a=1):
+                super(E, slf).__init__(a, 2, 3)
+                slf.d = d
+        assert C() == (1, 2, 3, 4)
+        assert C() == C()
+        assert hash(C()) == hash(C())
+        assert D() == (1, 2, 3, 4)
+        assert C() != D()
+        assert hash(C()) != hash(D())
+        assert E() == (1, 2, 3, 4)
+        assert C() != E()
+        assert hash(C()) != hash(E())
+
+    def test_can_compare_records_containing_records(self):
+        assert self.B(3, self.B(4, 5)) == self.B(3, self.B(4, 5))
+        assert self.B(3, self.B(4, 5)) != self.B(3, self.B(5, 4))
 
     def test_repr(self):
         class GrandChild(self.B):

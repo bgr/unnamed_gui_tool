@@ -143,3 +143,9 @@ class Record(object):
     def __repr__(self):
         keyvals = ['{0}={1}'.format(k, getattr(self, k)) for k in self._keys]
         return '{0}({1})'.format(self.__class__.__name__, ', '.join(keyvals))
+
+    def __hash__(self):
+        vals = tuple(getattr(self, k) for k in self._keys)
+        # prevent records of different types with same fields from having same
+        # hashes by including class itself along with values
+        return hash((self.__class__,) + vals)
