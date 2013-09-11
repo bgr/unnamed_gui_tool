@@ -1,497 +1,256 @@
 import pytest
-from my_project.util import Record, is_valid_identifier
+from my_project.util import Record
 
 
 class Test_base_class:
-
-    def test_instantiate(self):
+    def test_can_instantiate_without_args(self):
         r = Record()
-        assert r.keys == ()
+        assert r._frozen
 
-    def test_str(self):
-        r = Record()
-        assert str(r) == 'Record()'
-
-    def test_comparable_with_tuple(self):
-        assert Record() == ()
-
-    def test_comparable_with_another_Record(self):
-        assert Record() == Record()
-
-    def test_doesnt_take_arguments(self):
-        with pytest.raises(TypeError) as err:
-            Record(1)
-        assert 'Record takes exactly 0 items, got 1' in err.value.message
-
-        with pytest.raises(TypeError) as err:
-            Record(1, b=2)
-        assert 'Record takes exactly 0 items, got 2' in err.value.message
-
-    def test_cannot_set_keys(self):
-        r = Record()
-        with pytest.raises(TypeError) as err:
-            r.a = 2
-        assert 'Record is immutable' in err.value
-
-    def test_cannot_change_keys_of_class(self):
+    def test_raises_when_passed_args(self):
         with pytest.raises(TypeError):
-            Record.keys = ('a',)
-            Record.keys = ()  # reset if above passes so other tests don't fail
+            Record(2)
 
-    def test_cannot_change_keys_of_instance(self):
+    def test_raises_when_passed_kwargs(self):
+        with pytest.raises(TypeError):
+            Record(a=2)
+
+    def test_raises_when_assigning_new_fields(self):
         r = Record()
-        with pytest.raises(TypeError) as err:
-            r.keys = ('a',)
-            Record.keys = ()  # reset so other tests don't fail
-        assert 'Record is immutable' in err.value
+        with pytest.raises(TypeError):
+            r.x = 2
 
+    def test_replace_cannot_add_new_fields(self):
+        r = Record()
+        with pytest.raises(TypeError):
+            r.replace(x=2)
 
 
 class Test_inheritance:
+    def test_without_init(self):
+        class B(Record):
+            pass
+        b = B()
+        assert b._frozen
 
-    def setup_class(self):
-        class C(Record):
-            keys = ('a', 'bc')
-        self.C = C
+    def test_empty_init(self):
+        class B(Record):
+            def __init__(self):
+                pass
+        b = B()
+        assert b._frozen
 
-    def test_instantiate_with_positional_args(self):
-        self.C(2, 3)
+    def test_init_with_one_arg(self):
+        class B(Record):
+            def __init__(self, hello):
+                self.hello = hello
+        b = B(2)
+        assert b.hello == 2
+        assert b._frozen
 
-    def test_instantiate_with_keyword_args(self):
-        self.C(a=2, bc=3)
-        self.C(bc=3, a=3)
+    def test_init_with_one_arg_with_default(self):
+        class B(Record):
+            def __init__(self, hello=4):
+                self.hello = hello
+        b = B(2)
+        assert b.hello == 2
+        assert b._frozen
 
-    def test_instantiate_with_mixed_args(self):
-        self.C(2, bc=3)
+        b = B()
+        assert b.hello == 4
+        assert b._frozen
 
-    def test_isinstance_of_Record(self):
-        assert isinstance(self.C(2, 3), Record)
+    def test_init_with_multiple_args(self):
+        class B(Record):
+            def __init__(self, a, b, c=3, hello=4):
+                self.a, self.b, self.c, self.hello = a, b, c, hello
+        b = B(1, 2, 5)
+        assert (b.a, b.b, b.c, b.hello) == (1, 2, 5, 4)
+        assert b._frozen
 
-    def test_str(self):
-        assert str(self.C(2, 3)) == 'C(a=2, bc=3)'
-        assert str(self.C(2, bc=3)) == 'C(a=2, bc=3)'
-        assert str(self.C(bc=3, a=2)) == 'C(a=2, bc=3)'
+    def test_replace_one_value(self):
+        class B(Record):
+            def __init__(self, a, b, c=3, hello=4):
+                self.a, self.b, self.c, self.hello = a, b, c, hello
+        b1 = B(1, 2, 5)
+        b2 = b1.replace(c=22)
+        assert (b1.a, b1.b, b1.c, b1.hello) == (1, 2, 5, 4)
+        assert (b2.a, b2.b, b2.c, b2.hello) == (1, 2, 22, 4)
+        assert b1._frozen
+        assert b2._frozen
 
-    def test_comparable_with_tuple(self):
-        assert self.C(2, 3) == (2, 3)
-        assert self.C(a=2, bc=3) == (2, 3)
-        assert self.C(2, bc=3) == (2, 3)
-        assert self.C(bc=3, a=2) == (2, 3)
+    def test_replace_multiple_values(self):
+        class B(Record):
+            def __init__(self, a, b, c=3, hello=4):
+                self.a, self.b, self.c, self.hello = a, b, c, hello
+        b1 = B(1, 2, 5)
+        b2 = b1.replace(c=22, a=11)
+        assert (b1.a, b1.b, b1.c, b1.hello) == (1, 2, 5, 4)
+        assert (b2.a, b2.b, b2.c, b2.hello) == (11, 2, 22, 4)
+        assert b1._frozen
+        assert b2._frozen
 
-    def test_comparable_with_another_C(self):
-        assert self.C(2, 3) == self.C(bc=3, a=2)
+    def test_cant_modify_after_replace(self):
+        class B(Record):
+            def __init__(self, a, b, c=3, hello=4):
+                self.a, self.b, self.c, self.hello = a, b, c, hello
+        b = B(1, 2, 5)
+        b2 = b.replace(c=22)
 
-    def test_can_access_properties(self):
-        c = self.C(2, 3)
-        assert c.a == 2
-        assert c.bc == 3
-
-    def test_can_access_via_index(self):
-        c = self.C(bc=3, a=2)
-        assert c[0] == 2
-        assert c[1] == 3
-
-    def test_cannot_change_values(self):
-        c = self.C(2, 3)
-        with pytest.raises(TypeError) as err:
-            c.a = 4
-        assert 'C is immutable' in err.value
-
-    def test_cannot_change_values_via_index(self):
-        c = self.C(2, 3)
-        with pytest.raises(TypeError) as err:
-            c[0] = 4
-        assert 'C is immutable' in err.value
-
-    def test_cannot_change_keys_of_class(self):
         with pytest.raises(TypeError):
-            self.C.keys = ('de',)
-            self.C.keys = ('a', 'bc')  # reset so other tests don't fail
+            b.a = 3
+        with pytest.raises(TypeError):
+            b2.a = 3
+        with pytest.raises(TypeError):
+            b.x = 3
+        with pytest.raises(TypeError):
+            b2.x = 3
 
-    def test_cannot_change_keys_of_instance(self):
-        c = self.C(2, 3)
+    def test_accepts_unhashable_arguments_if_converted_manually(self):
+        class B(Record):
+            def __init__(self, a):
+                self.a = tuple(a)
+
+        b = B([3])
+        assert b.a == (3,)
+        assert type(b.a) == tuple
+
+    def test_raises_when_assigned_unhashable_fields(self):
+        class B(Record):
+            def __init__(self, a):
+                self.a = a
         with pytest.raises(TypeError) as err:
-            c.keys = ('de',)
-            c.keys = ('a', 'bc')  # reset so other tests don't fail
-        assert 'C is immutable' in err.value
+            B([3])
+        assert 'hashable' in err.value.message
 
-    def test_cannot_pass_keyword_arguments_with_wrong_keys(self):
+
+    def test_raises_when_init_leaves_unassigned_fields(self):
+        class B(Record):
+            def __init__(self, a, b):
+                self.a = a
         with pytest.raises(TypeError) as err:
-            self.C(d=2, dc=3)
-        assert 'Invalid' in err.value.message
+            B(1, 2)
+        assert 'all fields' in err.value.message
 
+    def test_raises_when_init_assigns_extra_fields(self):
+        class B(Record):
+            def __init__(self, a, b):
+                self.a = a
+                self.b = b
+                self.c = 1
         with pytest.raises(TypeError) as err:
-            self.C(2, dc=3)
-        assert 'Invalid' in err.value.message
+            B(1, 2)
+        assert 'all fields' in err.value.message
 
-    def test_doesnt_accept_unhashable_values(self):
+    def test_raises_when_init_assigns_wrong_fields(self):
+        class B(Record):
+            def __init__(self, a):
+                self.blah = a
         with pytest.raises(TypeError) as err:
-            self.C(a=2, bc=[])
-        assert "unhashable type: 'list'" in err.value
+            B(2)
+        assert 'all fields' in err.value.message
 
-    @pytest.mark.parametrize('create', [
-        lambda self: self.C(2),
-        lambda self: self.C(2, 3, 4),
-        lambda self: self.C(2, 3, a=2, bc=3),
-        lambda self: self.C(2, a=2, bc=3),
-        lambda self: self.C(2, bc=2, a=3),
-        lambda self: self.C(a=2, bc=2, d=3),
-        lambda self: self.C(2, 3, a=2),
-        lambda self: self.C(2, 3, bc=3),
-        lambda self: self.C(**{'a': 2}),
-        lambda self: self.C(**{'a': 2, 'bc': 3, 'd': 4}),
-        lambda self: self.C(2, **{'bc': 3, 'd': 4}),
-    ])
-    def test_cannot_wrong_number_of_arguments(self, create):
-        with pytest.raises(TypeError) as err:
-            create(self)
-        assert 'takes' in err.value.message
+    def test_raises_when_trying_to_reassign(self):
+        class B(Record):
+            def __init__(self, a):
+                self.a = a
+        b = B(2)
+        with pytest.raises(TypeError):
+            b.a = 3
+        with pytest.raises(TypeError):
+            b.x = 3
 
+    def test_raises_on_init_with_varargs(self):
+        with pytest.raises(TypeError):
+            class B(Record):
+                def __init__(self, *args):
+                    pass
 
-    @pytest.mark.parametrize('create', [
-        lambda self: self.C(2, a=2),
-        lambda self: self.C(2, a=3),
-        lambda self: self.C(2, **{'a': 3}),
-    ])
-    def test_cannot_pass_same_keyword_arguments_along_positional(self, create):
-        with pytest.raises(TypeError) as err:
-            create(self)
-        assert 'already specified' in err.value.message
-
-
-
-class Test_many_arguments:
-
-    def setup_class(self):
-        class MyFiveThings(Record):
-            keys = ('x', 'bc', 'defg', 'h', 'i')
-        self.C = MyFiveThings
-
-    @pytest.mark.parametrize('create', [
-        lambda self: self.C(2, 3, 4, 5, 6),
-        lambda self: self.C(x=2, bc=3, defg=4, h=5, i=6),
-        lambda self: self.C(2, bc=3, defg=4, h=5, i=6),
-        lambda self: self.C(2, 3, defg=4, h=5, i=6),
-        lambda self: self.C(2, 3, 4, h=5, i=6),
-        lambda self: self.C(2, 3, 4, 5, i=6),
-        lambda self: self.C(**{'x': 2, 'bc': 3, 'defg': 4, 'h': 5, 'i': 6}),
-        lambda self: self.C(2, **{'bc': 3, 'defg': 4, 'h': 5, 'i': 6}),
-        lambda self: self.C(2, 3, **{'defg': 4, 'h': 5, 'i': 6}),
-        lambda self: self.C(2, 3, 4, **{'h': 5, 'i': 6}),
-        lambda self: self.C(2, 3, 4, 5, **{'i': 6}),
-        lambda self: self.C(x=2, **{'bc': 3, 'defg': 4, 'h': 5, 'i': 6}),
-        lambda self: self.C(defg=4, **{'bc': 3, 'x': 2, 'h': 5, 'i': 6}),
-        lambda self: self.C(bc=3, h=5, **{'defg': 4, 'x': 2, 'i': 6}),
-        lambda self: self.C(x=2, bc=3, defg=4, **{'h': 5, 'i': 6}),
-        lambda self: self.C(2, 3, h=5, **{'defg': 4, 'i': 6}),
-        lambda self: self.C(2, 3, i=6, h=5, **{'defg': 4}),
-    ])
-    def test_args(self, create):
-        c = create(self)
-        assert c == (2, 3, 4, 5, 6)
-        assert c == self.C(2, 3, 4, 5, 6)
-        assert str(c) == 'MyFiveThings(x=2, bc=3, defg=4, h=5, i=6)'
-        assert c.defg == 4
-        assert c[2] == 4
-
-
-
-class Test_duplicated_keys_in_subclass:
-
-    def setup_class(self):
-        class Base(Record):
-            keys = ('x', 'a', 'b')
-        self.Base = Base
-
-    def test_repeat_some(self):
-        class Ch(self.Base):
-            keys = ('a', 'c')
-        assert Ch.keys == ('x', 'a', 'b', 'c')
-
-        class Grch(Ch):
-            keys = ('a', 'c', 'd')
-        assert Grch.keys == ('x', 'a', 'b', 'c', 'd')
-
-    def test_repeat_all(self):
-        class Ch(self.Base):
-            keys = ('a', 'x', 'b')
-        assert Ch.keys == ('x', 'a', 'b')
-
-        class Grch(Ch):
-            keys = ('x', 'd', 'b', 'c', 'a')
-        assert Grch.keys == ('x', 'a', 'b', 'd', 'c')
+    def test_raises_on_init_with_kwargs(self):
+        with pytest.raises(TypeError):
+            class B(Record):
+                def __init__(self, **kwargs):
+                    pass
 
 
 
 class Test_grandchildren:
-
     def setup_class(self):
-        class Base(Record):
-            keys = ('p1', 'mm')
-
-
-        class Ch1(Base):
-            keys = ('c11', 'c12')
-
-        class Grch11(Ch1):
-            keys = ('a111', 'g112')
-
-        class Grch12(Ch1):
-            keys = ['b', 'g122']
-
-
-        class Ch2(Base):
-            keys = ('c21', 'c22', 'c23')
-
-        class Grch21(Ch2):
-            keys = ['g211']
-
-        class Grch22(Ch2):
-            keys = ('x', 'yz')
-
-        self.Base = Base
-        self.Ch1 = Ch1
-        self.Ch2 = Ch2
-        self.Grch11 = Grch11
-        self.Grch12 = Grch12
-        self.Grch21 = Grch21
-        self.Grch22 = Grch22
-
-
-    def test_child_keys_appended_to_parent_keys(self):
-        assert self.Base.keys == ('p1', 'mm')
-        assert self.Ch1.keys == ('p1', 'mm', 'c11', 'c12')
-        assert self.Ch2.keys == ('p1', 'mm', 'c21', 'c22', 'c23')
-        assert self.Grch11.keys == ('p1', 'mm', 'c11', 'c12', 'a111', 'g112')
-        assert self.Grch12.keys == ('p1', 'mm', 'c11', 'c12', 'b', 'g122')
-        assert self.Grch21.keys == ('p1', 'mm', 'c21', 'c22', 'c23', 'g211')
-        assert self.Grch22.keys == ('p1', 'mm', 'c21', 'c22', 'c23', 'x', 'yz')
-
-    def test_cannot_instantiate_without_parents_keys(self):
-        with pytest.raises(TypeError) as err:
-            self.Ch1(2, 3)
-        assert 'takes exactly 4' in err.value.message
-
-        with pytest.raises(TypeError) as err:
-            self.Ch2(c21=4, c22=5, c23=6)
-        assert 'takes exactly 5' in err.value.message
-
-        with pytest.raises(TypeError) as err:
-            self.Grch22(4, 5, 6, 7, 8)
-        assert 'takes exactly 7' in err.value.message
-
-    def test_instantiate_requires_parents_keys(self):
-        self.Ch1(p1=2, mm=3, c11=4, c12=5)
-        self.Ch2(p1=2, mm=3, c21=4, c22=5, c23=6)
-        self.Grch22(p1=2, mm=3, c21=4, c22=5, c23=6, x=7, yz=8)
-
-    def test_order_of_keyword_arguments(self):
-        c = self.Ch1(c12=5, mm=3, p1=2, c11=4)
-        gc = self.Grch22(2, 3, yz=8, c21=4, c23=6, c22=5, x=7)
-        assert c  == (2, 3, 4, 5)
-        assert gc == (2, 3, 4, 5, 6, 7, 8)
-
-    def test_can_get_values_via_keys(self):
-        assert self.Ch1(p1=2, mm=3, c11=4, c12=5).p1 == 2
-        assert self.Ch1(p1=2, mm=3, c11=4, c12=5).c11 == 4
-        assert self.Grch22(2, 3, 4, c22=5, c23=6, x=7, yz=8).p1 == 2
-        assert self.Grch22(2, 3, 4, c22=5, c23=6, x=7, yz=8).c21 == 4
-        assert self.Grch22(2, 3, 4, c22=5, c23=6, x=7, yz=8).c22 == 5
-        assert self.Grch22(2, 3, 4, c22=5, c23=6, x=7, yz=8).x == 7
-        assert self.Grch22(2, 3, 4, c22=5, c23=6, x=7, yz=8).yz == 8
-
-    def test_can_get_values_via_index(self):
-        assert self.Ch1(p1=2, mm=3, c11=4, c12=5)[0] == 2
-        assert self.Ch1(p1=2, mm=3, c11=4, c12=5)[2] == 4
-        assert self.Grch22(2, 3, 4, c22=5, c23=6, x=7, yz=8)[0] == 2
-        assert self.Grch22(2, 3, 4, c22=5, c23=6, x=7, yz=8)[2] == 4
-        assert self.Grch22(2, 3, 4, c22=5, c23=6, x=7, yz=8)[3] == 5
-        assert self.Grch22(2, 3, 4, c22=5, c23=6, x=7, yz=8)[5] == 7
-        assert self.Grch22(2, 3, 4, c22=5, c23=6, x=7, yz=8)[6] == 8
-
-    def test_isinstance(self):
-        assert isinstance(self.Base(2, 3), Record)
-        c = self.Ch1(5, 6, 7, 8)
-        assert isinstance(c, Record)
-        assert isinstance(c, self.Base)
-        gc = self.Grch11(3, 4, 5, 6, 7, 8)
-        assert isinstance(gc, Record)
-        assert isinstance(gc, self.Base)
-        assert isinstance(gc, self.Ch1)
-        assert not isinstance(gc, self.Ch2)
-        assert not isinstance(gc, self.Grch12)
-
-    def test_cannot_change_values_via_properties(self):
-        b = self.Base(2, 3)
-        with pytest.raises(TypeError):
-            b.p1 = 3
-        assert b == (2, 3)
-
-        c = self.Ch1(5, 6, 7, 8)
-        with pytest.raises(TypeError):
-            c.p1 = 3
-        with pytest.raises(TypeError):
-            c.c12 = 3
-        assert c == (5, 6, 7, 8)
-
-        gc = self.Grch11(3, 4, 5, 6, 7, 8)
-        with pytest.raises(TypeError):
-            gc.p1 = 3
-        with pytest.raises(TypeError):
-            gc.c12 = 3
-        with pytest.raises(TypeError):
-            gc.g112 = 3
-        assert gc == (3, 4, 5, 6, 7, 8)
-
-    def test_cannot_change_values_via_index(self):
-        b = self.Base(2, 3)
-        with pytest.raises(TypeError):
-            b[1] = 2
-        assert b == (2, 3)
-
-        c = self.Ch1(5, 6, 7, 8)
-        with pytest.raises(TypeError):
-            c[1] = 2
-        with pytest.raises(TypeError):
-            c[3] = 2
-        assert c == (5, 6, 7, 8)
-
-        gc = self.Grch11(3, 4, 5, 6, 7, 8)
-        with pytest.raises(TypeError):
-            gc[3] = 3
-        with pytest.raises(TypeError):
-            gc[5] = 3
-        assert gc == (3, 4, 5, 6, 7, 8)
-
-    def test_cannot_mess_with_keys(self):
-        with pytest.raises(TypeError):
-            self.Base.keys = ('a', 'b',)
-        with pytest.raises(TypeError):
-            self.Ch1.keys = ('a', 'b',)
-        with pytest.raises(TypeError):
-            self.Grch12.keys = ('a', 'b',)
-
-        b = self.Base(2, 3)
-        c = self.Ch1(5, 6, 7, 8)
-        gc = self.Grch11(3, 4, 5, 6, 7, 8)
-        with pytest.raises(TypeError):
-            b.keys = ('a', 'b',)
-        with pytest.raises(TypeError):
-            c.keys = ('a', 'b',)
-        with pytest.raises(TypeError):
-            gc.keys = ('a', 'b',)
-
-        assert b.keys == ('p1', 'mm')
-        assert c.keys == ('p1', 'mm', 'c11', 'c12')
-        assert gc.keys == ('p1', 'mm', 'c11', 'c12', 'a111', 'g112')
-        assert self.Base.keys == ('p1', 'mm')
-        assert self.Ch1.keys == ('p1', 'mm', 'c11', 'c12')
-        assert self.Ch2.keys == ('p1', 'mm', 'c21', 'c22', 'c23')
-        assert self.Grch11.keys == ('p1', 'mm', 'c11', 'c12', 'a111', 'g112')
-        assert self.Grch12.keys == ('p1', 'mm', 'c11', 'c12', 'b', 'g122')
-        assert self.Grch21.keys == ('p1', 'mm', 'c21', 'c22', 'c23', 'g211')
-        assert self.Grch22.keys == ('p1', 'mm', 'c21', 'c22', 'c23', 'x', 'yz')
-
-
-
-class Test_valid_key_names:
-
-    @pytest.mark.parametrize('key', [
-        '', ' ', '$', '$a', 'a$', '@', 'a@', '@a', '9', '99', '9a', 'a b',
-        'a-b', 'a!', '!', '+', 'a+b', 'a+', 'def', 'is', 'for',
-    ])
-    def test_disallowed(self, key):
-        assert not is_valid_identifier(key)
-        with pytest.raises(TypeError) as err:
-            class X(Record):
-                keys = ('a', key, 'b')
-        assert 'Invalid keys' in err.value and key in err.value
-
-    @pytest.mark.parametrize('key', [
-        'a', 'hey', 'hElLo', 'HELLO', 'H9_l__lo', '_9',
-    ])
-    def test_allowed(self, key):
-        assert is_valid_identifier(key)
-
-        class X(Record):
-            keys = (key,)
-        assert X.keys == (key,)
-
-
-
-class Test_prepared_values:
-
-    def test_basic(self):
-
-        class C(Record):
-            keys = ('a', 'b',)
-
-            @classmethod
-            def prepare(_, a=1, b=2):
-                return {'a': a + 1, 'b': b + 2}
-
-        assert C() == (2, 4)
-        assert C(3, 4) == (4, 6)
-
-    def test_raises_on_returned_unrecognized_keys(self):
-
-        class C(Record):
-            keys = ('a', 'b',)
-
-            @classmethod
-            def prepare(_, **__):
-                return {'c': 3}
-
-        with pytest.raises(TypeError) as err:
-            C(1, 2)
-        assert 'match' in err.value.message
-
-
-    def test_grandchild_inherits_prepare(self):
-
         class B(Record):
-            keys = ('a', 'b',)
+            def __init__(self, a, b, c=3):
+                self.a = a
+                self.b = b
+                self.c = c
+        self.B = B
 
-            @classmethod
-            def prepare(_, a=1, b=2):
-                return {'a': a + 1, 'b': b + 2}
-
-        class C(B):
+    def test_uses_parents_init_when_no_init(self):
+        class C(self.B):
             pass
 
-        assert C() == (2, 4)
-        assert C(3, 4) == (4, 6)
+        c = C(1, 2)
+        assert c.a == 1
+        assert c.b == 2
+        assert c.c == 3
+        assert c._frozen
 
-    def test_grandchild_overrides_prepare(self):
+    def test_raises_when_not_enough_arguments(self):
+        class C(self.B):
+            pass
+        with pytest.raises(TypeError):
+            C()
+        with pytest.raises(TypeError):
+            C(1)
 
-        class B(Record):
-            keys = ('a', 'b',)
+    def test_init_with_no_arguments_ok_if_sets_fields(self):
+        class C(self.B):
+            def __init__(self):
+                self.a = 2
+                self.b = 3
+                self.c = 4
+        c = C()
+        assert c.a == 2
+        assert c.b == 3
+        assert c.c == 4
+        assert c._frozen
 
-            @classmethod
-            def prepare(_, a=1, b=2):
-                return {'a': a + 1, 'b': b + 2}
+    def test_init_with_no_arguments_ok_if_sets_fields_via_parent_init(self):
+        class C(self.B):
+            def __init__(slf):
+                super(C, slf).__init__(2, 3, 4)
+        c = C()
+        assert c.a == 2
+        assert c.b == 3
+        assert c.c == 4
+        assert c._frozen
 
-        class C(B):
-            @classmethod
-            def prepare(_, a=3, b=4):
-                return {'a': a + 2, 'b': b + 3}
+    def test_init_can_declare_additional_fields(self):
+        class C(self.B):
+            def __init__(slf, d, e=5):
+                slf.d = d
+                super(C, slf).__init__(1, 2)
+                slf.e = e
+        c = C(4)
+        assert (c.a, c.b, c.c, c.d, c.e) == (1, 2, 3, 4, 5)
+        assert c._frozen
 
-        assert C() == (5, 7)
-        assert C(1, 2) == (3, 5)
+    def test_raises_when_init_leaves_unassigned_parents_fields(self):
+        class C(self.B):
+            def __init__(self):
+                self.a = 1
+                self.c = 1
+        with pytest.raises(TypeError) as err:
+            C()
+        assert 'all fields' in err.value.message
 
-    def test_grandchild_calls_parents_prepare(self):
+    def test_raises_when_init_leaves_unassigned_own_fields(self):
+        class C(self.B):
+            def __init__(slf, d, e=5):
+                slf.d = d
+                super(C, slf).__init__(1, 2)
+        with pytest.raises(TypeError) as err:
+            C(3)
+        assert 'all fields' in err.value.message
 
-        class B(Record):
-            keys = ('a', 'b',)
 
-            @classmethod
-            def prepare(_, a=1, b=2):
-                return {'a': a + 1, 'b': b + 2}
 
-        class C(B):
-            @classmethod
-            def prepare(cls, a=3, b=4):
-                return B.prepare(a + 0.1, b + 0.2)
-
-        assert C() == (4.1, 6.2)
-        assert C(4, 5) == (5.1, 7.2)
+# TODO: __eq__

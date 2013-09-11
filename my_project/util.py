@@ -1,7 +1,5 @@
-import re
 import collections
-#from inspect import getargspec as _getargspec
-from keyword import iskeyword as _iskeyword
+import inspect
 
 
 def duplicates(ls):
@@ -60,122 +58,75 @@ def bounding_box_around_points(point_list):
     return reduce(expand_box, point_list, (pos_inf, pos_inf, neg_inf, neg_inf))
 
 
-def is_valid_identifier(str_val):
-    return (not _iskeyword(str_val) and
-            re.match("[_A-Za-z][_a-zA-Z0-9]*$", str_val) is not None)
+#def is_valid_identifier(str_val):
+#    return (not keyword.iskeyword(str_val) and
+#            re.match("[_A-Za-z][_a-zA-Z0-9]*$", str_val) is not None)
 
 
-class _RecordMeta(type):
-
+class RecordMeta(type):
     def __new__(mcs, name, bases, dct):
-        # don't allow inheriting from multiple bases as a precaution
         if len(bases) != 1:
             raise TypeError("Inheriting from multiple bases is not supported")
-        # allow to leave 'keys' unspecified to just inherit parents' keys
-        if dct.get('keys') is None:
-            dct['keys'] = ()
-        elif not isinstance(dct['keys'], (tuple, list)):
-            raise TypeError("Class variable 'keys' must be tuple or list")
+        init = dct.get('__init__')
+        all_keys = [] if bases[0] is object else list(bases[0]._keys)
+        if init:
+            argspec = inspect.getargspec(init)
+            if (argspec.varargs, argspec.keywords) != (None, None):
+                raise TypeError("Varargs and keywords are not allowed")
+            if '_keys' in argspec.args or '_frozen' in argspec.args:
+                raise TypeError("No cheating")
 
-        # build complete keys tuple by prepending keys of superclasses since
-        # subclass must have all keys its bases have. collect keys starting
-        # from Record through the subclasses and finally keys from class
-        # currently being built
-        parent_keys = ([Par.keys for Par in reversed(bases[0].mro()[:-2])]
-                       + [list(dct['keys'])])
-        flat_keys = [k for pkeys in parent_keys for k in pkeys]
+            all_keys += argspec.args[1:]
 
-        # keys must also be valid identifiers
-        invalid = [k for k in flat_keys if not is_valid_identifier(k)]
-        if invalid:
-            raise TypeError("Invalid keys: {0}".format(', '.join(invalid)))
+            # Override __init__ to freeze instance immediately after
+            # user-defined __init__ has exited. If user's class doesn't have
+            # __init__, some superclass' __init__ will take care of freezing.
+            # Instance is conidered to be frozen when it has _frozen property
+            # with value 1. Since superclass might also have wrapped init that
+            # freezes on exit, in order to support calling superclass' __init__
+            # within child class __init__ and still be able to set values,
+            # add 1/subtract 1 logic makes sure that _frozen has value 1 only
+            # when outermost (child class') __init__ exits.
+            def wrapped_init(self, *args, **kwargs):
+                if not hasattr(self, '_frozen'):
+                    self._frozen = 2
+                else:
+                    self._frozen += 1
+                init(self, *args, **kwargs)  # call user-defined __init__
+                self._frozen -= 1
+                if self._frozen == 1:  # last __init__ has exited, check values
+                    assigned_keys = self.__dict__.keys()
+                    assigned_keys.remove('_frozen')
+                    if sorted(all_keys) != sorted(assigned_keys):
+                        raise TypeError("Must assign only and all fields "
+                                        "specified by __init__ parameters")
+                    # it is ok to pass unhashable values to __init__, but user
+                    # must take care to convert them to hashable. after
+                    # outermost __init__ exits, all fields must be hashable
+                    for v in self.__dict__.values():
+                        hash(v)
 
-        # filter out duplicate keys, parents' keys have precedence and come
-        # before any child's duplicate keys
-        complete_keys = tuple(k for k, seen in with_preceding(flat_keys)
-                              if k not in seen)
-        dct['keys'] = complete_keys
 
-        # now that we have complete keys, check if 'prepare' method
-        # is valid - all parameter names must be valid key names
-        # we cannot check that it will return valid dict though
-        # DISABLED since jython's classmethod object doesn't have __func__
-        #prep = dct.get('prepare')
-        #if prep and not all(arg in complete_keys
-        #                    for arg in _getargspec(prep.__func__).args):
-        #    raise TypeError("Parameter names of 'prepare' must match 'keys'")
-
+            dct['__init__'] = wrapped_init
+            dct['_keys'] = tuple(all_keys)
         return type.__new__(mcs, name, bases, dct)
 
-    def __setattr__(cls, _, __):  # mainly to prevent modifying Class.keys
-        raise TypeError("Nope")
 
+class Record(object):
+    __metaclass__ = RecordMeta
 
-# TODO: recordInstance.make(newparams)
+    def __setattr__(self, name, value):
+        if hasattr(self, '_frozen') and self._frozen == 1:
+            raise TypeError('{0} is immutable'.format(self.__class__.__name__))
+        self.__dict__[name] = value
 
-class Record(tuple):
-    __metaclass__ = _RecordMeta
-    keys = ()
+    def __init__(self):
+        pass  # safeguard to assure metaclass has something to wrap
 
-    def __new__(cls, *args, **kwargs):
-        n_args = len(args) + len(kwargs)
-        n_keys = len(cls.keys)
-        has_prepare = hasattr(cls, 'prepare')
-        # accept less arguments if there is prepare function which might
-        # take care of default values
-        if n_args > n_keys and has_prepare:
-            raise TypeError("Too many arguments, {0} takes at most {1} items, "
-                            "got {2}".format(cls.__name__, n_keys, n_args))
-        elif n_args != n_keys and not has_prepare:
-            raise TypeError("{0} takes exactly {1} items, got {2} (you can "
-                            "add 'prepare' function to implement default "
-                            "values)".format(cls.__name__, n_keys, n_args))
-
-        # map positional args to as many keys as possible
-        positional = dict(zip(cls.keys, args))
-        for key in positional.keys():
-            if key in kwargs:
-                raise TypeError("Argument '{0}' already specified "
-                                "using positional arguments".format(key))
-        for key in kwargs.keys():
-            if key not in cls.keys:
-                raise TypeError("Invalid keyword argument '{0}'".format(key))
-
-        # all key-value pairs that were passed when instantiating
-        gathered = dict(positional.items() + kwargs.items())
-        # pass them to 'prepare' function if there is one
-        if has_prepare:
-            prepared = cls.prepare(**gathered)
-            if isinstance(prepared, dict):
-                if any(k not in cls.keys for k in prepared.keys()):
-                    raise TypeError("'prepare' must return dict with keys "
-                                    "that match {0}.keys".format(cls.__name__))
-                # prepared is a valid dictionary
-                gathered.update(prepared)
-
-        missing = [k for k in cls.keys if k not in gathered.keys()]
-        if missing:
-            raise TypeError("Missing values for: {0}".format(
-                            ', '.join(missing)))
-
-        vals = tuple([gathered[key] for key in cls.keys])  # order matters
-
-        # all values must be hashable
-        [hash(val) for val in vals]
-
-        ret = super(Record, cls).__new__(cls, vals)
-        return ret
-
-    def __getattr__(self, key):
-        return self[self.keys.index(key)]
-
-    def __setattr__(self, _, __):
-        raise TypeError('{0} is immutable'.format(self.__class__.__name__))
-
-    def __setitem__(self, _, __):
-        raise TypeError('{0} is immutable'.format(self.__class__.__name__))
-
-    def __repr__(self):
-        return '{0}({1})'.format(self.__class__.__name__,
-                                 ', '.join(['{0}={1}'.format(k, v) for k, v
-                                            in zip(self.keys, self)]))
+    def replace(self, **kwargs):
+        if '_frozen' in kwargs.keys():
+            raise TypeError("Nope")
+        new_dict = self.__dict__.copy()
+        new_dict.update(kwargs)
+        del new_dict['_frozen']
+        return self.__class__(**new_dict)
