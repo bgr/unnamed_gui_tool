@@ -30,6 +30,8 @@ class Modify(_BaseChange):
 
 def fix_xywh(x, y, width, height):
     x, y, width, height = map(float, [x, y, width, height])
+    if width == 0 and height == 0:
+        raise ValueError("Cannot have zero dimensions")
     if width < 0:
         x -= -width
         width = -width
@@ -45,34 +47,11 @@ class _BaseElement(Record):
                        or isinstance(parent, Link)):
             raise ValueError("parent must be element (but not Link) or None")
         self.parent = parent
-        #if any(not isinstance(ch, _BaseElement) for ch in children):
-            #raise ValueError("children must be elements")
         # TODO: parent must be member of same model, but this check has to
         # be performed elsewhere
 
-    @property
-    def bounds(self):
-        raise NotImplementedError("Forgot to implement 'bounds' property")
-
     def move(self, dx, dy):
         raise NotImplementedError("Forgot to implement 'move' method")
-
-    #def add_child(self, ch):
-        #raise TypeError("Not a container")
-
-    #def remove_child(self, ch):
-        #raise TypeError("Not a container")
-
-    #def change(self, **kwargs):
-        #"""Returns changelist with updates for self and all parents."""
-        #new = self.replace(**kwargs)
-        ## update all parents up to root to point to freshly updated elements
-        #more = []
-        #if self.parent:
-            #parents_children = list(self.parent.children)
-            #parents_children[parents_children.index(self)] = new
-            #more = self.parent.change(children=tuple(parents_children))
-        #return more + [Modify(self, new)]
 
 
 

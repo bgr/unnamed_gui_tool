@@ -181,7 +181,7 @@ def validate(changelist, existing):
     to_modify = filter(lambda ch: isinstance(ch, Modify), changelist)
     to_insert = filter(lambda ch: isinstance(ch, Insert), changelist)
 
-    is_elem = lambda el: isinstance(el, _BaseElement)
+    is_elem = lambda e: isinstance(e, _BaseElement)
 
     if not (all(is_elem(c.elem) for c in to_remove + to_insert) and
             all(is_elem(m.elem) and is_elem(m.modified) for m in to_modify)):
@@ -189,6 +189,8 @@ def validate(changelist, existing):
 
     # element have valid types at this point
     # now validate element values
+
+    is_elem = lambda e: isinstance(e, _BaseElement) and not isinstance(e, Link)
 
     if any(m.elem == m.modified for m in to_modify):
         raise ValueError("Modifying without actual changes")
@@ -219,11 +221,18 @@ def validate(changelist, existing):
     if duplicates(elems_ins + elems_old + elems_mod):
         raise ValueError("Changing and inserting identical elements")
 
-    if any(len(el.bounds) != 4 for el in elems_mod + elems_ins):
-        raise ValueError("Elements with invalid bounds tuple")
+    elems_cur = elems_ins + elems_old + elems_rmv
 
-    # TODO: this check should be done by elements themselves
-    if any(el.bounds[2:] == el.bounds[:2] for el in elems_mod + elems_ins
-           if not isinstance(el, Link)):  # TODO: remove this
-        # (x1, y1) == (x2, y2) where bounds is tuple (x1, y1, x2, y2)
-        raise ValueError("Elements with 0 dimensions")
+    parent_ok = lambda e: e.parent is None or (e.parent in existing
+                                               and is_elem(e.parent))
+    if not all(parent_ok(el) for el in elems_cur + elems_mod):
+        raise ValueError("Element's parent must be member of same model")
+
+    ins_links = [l for l in elems_ins if isinstance(l, Link)]
+    if not all(l.a in existing and l.b in existing for l in ins_links):
+        raise ValueError("Link's targets must be member of same model")
+
+    mod_links = [l for l in elems_mod if isinstance(l, Link)]
+    valid_target = lambda t: t in elems_mod or t in existing
+    if not all(valid_target(l.a) and valid_target(l.b) for l in mod_links):
+        raise ValueError("Modified link's targets must be in same model")

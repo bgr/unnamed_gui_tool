@@ -153,6 +153,7 @@ def test_allows_modified_link_with_targets_modified_in_same_changelist():
 
 
 def test_raises_on_changelist_without_updated_links():
+    # TODO
     # when modifying some element, and link exists which points to that same
     # element, changelist must contain modified link also
 
@@ -193,7 +194,7 @@ def test_raises_on_changelist_without_updated_links():
 def test_raises_when_inserting_link_with_targets_not_in_existing(link):
     with pytest.raises(ValueError) as err:
         validate([Insert(link)], elems)
-    assert "Link target" in err.value.message
+    assert "target" in err.value.message
 
 
 @pytest.mark.parametrize('new', [
@@ -205,4 +206,4 @@ def test_raises_when_modifying_link_target_into_element_not_in_existing(new):
     old = Link(elems[0], elems[1])
     with pytest.raises(ValueError) as err:
         validate([Modify(old, new)], elems)
-    assert "Link target" in err.value.message
+    assert "target" in err.value.message
