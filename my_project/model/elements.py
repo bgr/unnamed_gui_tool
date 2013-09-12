@@ -41,8 +41,9 @@ def fix_xywh(x, y, width, height):
 
 class _BaseElement(Record):
     def __init__(self, parent=None):
-        if parent and not isinstance(parent, _BaseElement):
-            raise ValueError("parent must be element or None")
+        if parent and (not isinstance(parent, _BaseElement)
+                       or isinstance(parent, Link)):
+            raise ValueError("parent must be element (but not Link) or None")
         self.parent = parent
         #if any(not isinstance(ch, _BaseElement) for ch in children):
             #raise ValueError("children must be elements")
@@ -78,7 +79,7 @@ class _BaseElement(Record):
 class Link(_BaseElement):
     def __init__(self, a, b):
         assert isinstance(a, _BaseElement) and not isinstance(a, Link)
-        assert isinstance(b, _BaseElement) and not isinstance(a, Link)
+        assert isinstance(b, _BaseElement) and not isinstance(b, Link)
         self.a = a
         self.b = b
         super(Link, self).__init__(None)  # Link never has parent

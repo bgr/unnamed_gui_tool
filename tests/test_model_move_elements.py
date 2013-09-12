@@ -194,7 +194,6 @@ class Test_moving_linked_elements:
             Modify(l, Link(exp_el1, el2)),
         ])
 
-
     def test_move_both_linked_elements(self):
         el1 = R(1, 2, 3, 4)
         el2 = R(3, 4, 5, 6)
@@ -203,93 +202,92 @@ class Test_moving_linked_elements:
         cl = move([el1, el2], 20, 30, [l, el1, el2, el3])
         exp_el1 = R(21, 32, 3, 4)
         exp_el2 = R(23, 34, 5, 6)
-        assert len(cl) == 2
+        assert len(cl) == 3
         assert set(cl) == set([
             Modify(el1, exp_el1),
             Modify(el2, exp_el2),
             Modify(l, Link(exp_el1, exp_el2)),
         ])
 
-
     def test_move_parent_of_nested_linked_element(self):
+        par = Container(1, 2)
         el1 = R(1, 2, 3, 4)
-        par = P(1, 2, 3, 4, [el1])
-        el2 = R(3, 4, 5, 6)
+        el2 = R(3, 4, 5, 6, par)
         l = Link(el1, el2)
         cl = move([par], 20, 30, [l, el1, el2, par])
-        exp_par = R(21, 32, 3, 4, [el1])
-        assert cl == [
+        # link must be updated also
+        exp_par = Container(21, 32)
+        exp_el2 = R(3, 4, 5, 6, exp_par)
+        exp_l = Link(el1, exp_el2)
+        assert len(cl) == 3
+        assert set(cl) == set([
             Modify(par, exp_par),
-        ]
-
-
-    @pytest.mark.parametrize('swap', [False, True])
-    def test_move_nested_element_of_linked_parent(self, swap):
-        el1 = R(1, 2, 3, 4)
-        par = P(1, 2, 3, 4, [el1])
-        el2 = R(3, 4, 5, 6)
-        if swap:
-            l = Link(par, el2)
-            exp_l = Link(exp_par, el2)
-        else:
-            l = Link(el2, par)
-            exp_l = Link(el2, exp_par)
-        cl = move([par], 20, 30, [el1, el2, par, l])
-        exp_el1 = R(21, 32, 3, 4)
-        exp_par = R(1, 2, 3, 4, (exp_el1,))
-        assert cl == [
-            Modify(el1, exp_el1),
-            Modify(par, exp_par),
-            Modify(l, exp_l),
-        ]
-
-
-    def test_move_both_linked_elements_one_is_nested(self):
-        el1 = R(1, 2, 3, 4)
-        par = P(1, 2, 3, 4, [el1])
-        el2 = R(3, 4, 5, 6)
-        l = Link(el1, el2)
-        cl = move([el1, el2], 20, 30, [l, el1, el2, par])
-        exp_el1 = R(21, 32, 3, 4)
-        exp_el2 = R(23, 34, 5, 6)
-        exp_par = R(1, 2, 3, 4, (exp_el1,))
-        exp_l = Link(exp_el1, exp_el2)
-        assert cl == [
-            Modify(el1, exp_el1),
             Modify(el2, exp_el2),
-            Modify(par, exp_par),
             Modify(l, exp_l),
-        ]
+        ])
 
-
-    def test_move_both_linked_elements_both_are_nested(self):
-        el1 = R(1, 2, 3, 4)
-        par1 = P(1, 2, 3, 4, [el1])
+    def test_move_linked_parent_with_nested_element(self):
+        par = Container(1, 2)
+        el1 = R(1, 2, 3, 4, par)
         el2 = R(3, 4, 5, 6)
-        par2 = P(2, 3, 4, 5, (el2,))
-        l = Link(el1, el2)
-        cl = move([el1, el2], 20, 30, [l, el1, el2, par1, par2])
-        exp_el1 = R(21, 32, 3, 4)
-        exp_el2 = R(23, 34, 5, 6)
-        exp_par1 = R(1, 2, 3, 4, (exp_el1,))
-        exp_par2 = R(2, 3, 4, 5, (exp_el2,))
-        exp_l = Link(exp_el1, exp_el2)
-        assert cl == [
+        l = Link(par, el2)
+        cl = move([par], 20, 30, [l, el1, el2, par])
+        # link must be updated also
+        exp_par = Container(21, 32)
+        exp_el1 = R(1, 2, 3, 4, exp_par)
+        exp_l = Link(exp_par, el2)
+        assert len(cl) == 3
+        assert set(cl) == set([
+            Modify(par, exp_par),
             Modify(el1, exp_el1),
-            Modify(el2, exp_el2),
+            Modify(l, exp_l),
+        ])
+
+    def test_move_parent_linked_to_its_child(self):
+        par = Container(1, 2)
+        el = R(3, 4, 5, 6, par)
+        l = Link(par, el)
+        cl = move([par], 20, 30, [l, el, par])
+        # it's allowed to have nested element linked to its parent
+        exp_par = Container(21, 32)
+        exp_el = R(3, 4, 5, 6, exp_par)
+        exp_l = Link(exp_par, exp_el)
+        assert len(cl) == 3
+        assert set(cl) == set([
+            Modify(par, exp_par),
+            Modify(el, exp_el),
+            Modify(l, exp_l),
+        ])
+
+    def test_move_two_different_parents_containing_linked_elements(self):
+        par1 = Container(1, 2)
+        par2 = Container(2, 3)
+        el1 = R(1, 2, 3, 4, par1)
+        el2 = R(3, 4, 5, 6, par2)
+        l = Link(el1, el2)
+        cl = move([par1, par2], 20, 30, [l, el1, el2, par1, par2])
+        exp_par1 = Container(21, 32)
+        exp_par2 = Container(22, 33)
+        exp_el1 = R(1, 2, 3, 4, exp_par1)
+        exp_el2 = R(3, 4, 5, 6, exp_par2)
+        exp_l = Link(exp_el1, exp_el2)
+        assert len(cl) == 5
+        assert set(cl) == set([
             Modify(par1, exp_par1),
             Modify(par2, exp_par2),
+            Modify(el1, exp_el1),
+            Modify(el2, exp_el2),
             Modify(l, exp_l),
-        ]
+        ])
 
 
 
-    # TODO:
-    # move link start/end vertex
-    # move multiple link's vertices
-    # move both linked elements and one link's vertex
-    # move both linked elements and one link's vertex - one is nested
-    # move both linked elements and one link's vertex - both are nested
-    # move both linked elements and multiple link's vertices
-    # move both linked elements and multiple link's vertices - one is nested
-    # move both linked elements and multiple link's vertices - both are nested
+# TODO:
+# move link start/end vertex
+# move multiple link's vertices
+# move both linked elements and one link's vertex
+# move both linked elements and one link's vertex - one is nested
+# move both linked elements and one link's vertex - both are nested
+# move both linked elements and multiple link's vertices
+# move both linked elements and multiple link's vertices - one is nested
+# move both linked elements and multiple link's vertices - both are nested

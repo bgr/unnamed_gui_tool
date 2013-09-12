@@ -111,14 +111,9 @@ def _move(what, dx, dy, existing):
         #return [el for el in existing if par in get_parents(el)]
         return [el for el in existing if el.parent == par]
 
-    #all_parents = set(p for el in what for p in get_parents(el))
-    #print 'parents:', all_parents
-    #assert all(is_elem(p) for p in all_parents), "invalid parent"
-
-    parent_also_moved = lambda el: any(p in what for p in get_parents(el))
-
     # children won't be moved, just updated to point to new parents
     # roots will have updated coordinates, and their children updated
+    parent_also_moved = lambda el: any(p in what for p in get_parents(el))
     roots = [el for el in what if not parent_also_moved(el)]
 
     def update_children(old_parent, new_parent):
@@ -127,10 +122,28 @@ def _move(what, dx, dy, existing):
         gr_pairs = [g for o, n in ch_pairs for g in update_children(o, n)]
         return ch_pairs + gr_pairs  # children and grandchildren pairs
 
-    root_pairs = [(r, r.move(dx, dy)) for r in roots]
-    ch_pairs = [p for o, n in root_pairs for p in update_children(o, n)]
+    roots = [(r, r.move(dx, dy)) for r in roots]
+    children = [pair for o, n in roots for pair in update_children(o, n)]
+    all_elems = roots + children
+    all_elems_dict = dict(all_elems)
+    orig_elems = all_elems_dict.keys()
 
-    return [Modify(old, new) for old, new in root_pairs + ch_pairs]
+    def updated_link(lnk):
+        a = lnk.a in orig_elems
+        b = lnk.b in orig_elems
+        if a and b:
+            return lnk._replace(a=all_elems_dict[lnk.a],
+                                b=all_elems_dict[lnk.b])
+        elif a:
+            return lnk._replace(a=all_elems_dict[lnk.a])
+        elif b:
+            return lnk._replace(b=all_elems_dict[lnk.b])
+        return None
+
+    links = [(l, updated_link(l)) for l in existing if isinstance(l, Link)]
+    links = [pair for pair in links if pair[1] is not None]
+
+    return [Modify(old, new) for old, new in all_elems + links]
 
 
 
