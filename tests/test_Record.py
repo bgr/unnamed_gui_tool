@@ -397,6 +397,20 @@ class Test_grandchildren:
         assert self.B(3, self.B(4, 5)) == self.B(3, self.B(4, 5))
         assert self.B(3, self.B(4, 5)) != self.B(3, self.B(5, 4))
 
+    def test_can_replace_parents_field_not_present_in_init(self):
+        class C(self.B):
+            def __init__(slf, d):
+                super(C, slf).__init__(1, 2, 3)
+                slf.d = d
+        c = C(4)
+        assert c == (1, 2, 3, 4)
+        c2 = c._replace(b=22)
+        assert c == (1, 2, 3, 4)
+        assert c2 == (1, 22, 3, 4)
+        assert c != c2
+        assert c._frozen
+        assert c2._frozen
+
     def test_repr(self):
         class GrandChild(self.B):
             def __init__(slf, d, a=55):

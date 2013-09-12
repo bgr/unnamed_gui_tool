@@ -1,5 +1,6 @@
 import collections
 import inspect
+from copy import copy
 
 
 def duplicates(ls):
@@ -139,10 +140,11 @@ class Record(object):
     def _replace(self, **kwargs):
         if '_frozen' in kwargs.keys():
             raise TypeError("Nope")
-        new_dict = self.__dict__.copy()
-        new_dict.update(kwargs)
-        del new_dict['_frozen']
-        return self.__class__(**new_dict)
+        if any(k not in self._keys for k in kwargs.keys()):
+            raise TypeError("Invalid parameter name, only field names allowed")
+        dup = copy(self)
+        dup.__dict__.update(kwargs)
+        return dup
 
     def __eq__(self, other):
         if isinstance(other, tuple):
