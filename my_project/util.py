@@ -39,8 +39,7 @@ def join_dicts(*dicts):
 
 
 def fseq(*functions):
-    """
-        Wraps given functions into single function that will, when called, call
+    """ Wraps given functions into single function that will, when called, call
         all functions in given sequence in the order they were given, passing
         the arguments to every function. Return value of the wrapper function
         is list of return values of each function.
@@ -56,6 +55,19 @@ def bounding_box_around_points(point_list):
     neg_inf = float("-inf")
     pos_inf = float("inf")
     return reduce(expand_box, point_list, (pos_inf, pos_inf, neg_inf, neg_inf))
+
+
+def partition(ls, pred=lambda el: el):
+    """ Partitions list (or other iterable) into two lists and returns tuple
+        (matched_elems_list, unmatched_elems_list).
+    """
+    matched, unmatched = [], []
+    for el in ls:
+        if pred(el):
+            matched.append(el)
+        else:
+            unmatched.append(el)
+    return (matched, unmatched)
 
 
 #def is_valid_identifier(str_val):
@@ -124,7 +136,7 @@ class Record(object):
     def __init__(self):
         pass  # safeguard to assure metaclass has something to wrap
 
-    def replace(self, **kwargs):
+    def _replace(self, **kwargs):
         if '_frozen' in kwargs.keys():
             raise TypeError("Nope")
         new_dict = self.__dict__.copy()

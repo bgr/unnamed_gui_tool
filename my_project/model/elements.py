@@ -5,11 +5,9 @@ from ..util import Record, bounding_box_around_points, remove_duplicates
 # model change elements
 
 class _BaseChange(Record):
-    keys = ('elem',)
-
-    @classmethod
-    def prepare(_, elem):
+    def __init__(self, elem):
         assert isinstance(elem, _BaseElement), "must be valid element"
+        self.elem = elem
 
 
 class Remove(_BaseChange):
@@ -21,12 +19,10 @@ class Insert(_BaseChange):
 
 
 class Modify(_BaseChange):
-    keys = ('modified',)
-
-    @classmethod
-    def prepare(cls, elem, modified):
-        _BaseChange.prepare(elem)
+    def __init__(self, elem, modified):
+        super(Modify, self).__init__(elem)
         assert isinstance(modified, _BaseElement), "must be valid element"
+        self.modified = modified
 
 
 
@@ -40,13 +36,18 @@ def fix_xywh(x, y, width, height):
     if height < 0:
         y -= -height
         height = -height
-    return { 'x': x, 'y': y, 'width': width, 'height': height }
+    return x, y, width, height
 
 
 class _BaseElement(Record):
-    def children(self):
-        """Declare '_children' key and override this method where needed."""
-        return tuple([])
+    def __init__(self, parent=None):
+        if parent and not isinstance(parent, _BaseElement):
+            raise ValueError("parent must be element or None")
+        self.parent = parent
+        #if any(not isinstance(ch, _BaseElement) for ch in children):
+            #raise ValueError("children must be elements")
+        # TODO: parent must be member of same model, but this check has to
+        # be performed elsewhere
 
     @property
     def bounds(self):
@@ -55,70 +56,57 @@ class _BaseElement(Record):
     def move(self, dx, dy):
         raise NotImplementedError("Forgot to implement 'move' method")
 
+    #def add_child(self, ch):
+        #raise TypeError("Not a container")
 
-class Rectangle(_BaseElement):
-    keys = ('x', 'y', 'width', 'height')
+    #def remove_child(self, ch):
+        #raise TypeError("Not a container")
 
-    @classmethod
-    def prepare(cls, x, y, width, height):
-        return fix_xywh(x, y, width, height)
+    #def change(self, **kwargs):
+        #"""Returns changelist with updates for self and all parents."""
+        #new = self.replace(**kwargs)
+        ## update all parents up to root to point to freshly updated elements
+        #more = []
+        #if self.parent:
+            #parents_children = list(self.parent.children)
+            #parents_children[parents_children.index(self)] = new
+            #more = self.parent.change(children=tuple(parents_children))
+        #return more + [Modify(self, new)]
 
-    @property
-    def bounds(self):
-        return (self.x, self.y, self.x + self.width, self.y + self.height)
-
-    def move(self, dx, dy):
-        return Rectangle(self.x + dx, self.y + dy, self.width, self.height)
-
-
-class Ellipse(_BaseElement):
-    keys = ('x', 'y', 'width', 'height')
-
-    @classmethod
-    def prepare(cls, x, y, width, height):
-        return fix_xywh(x, y, width, height)
-
-    @property
-    def bounds(self):
-        return (self.x, self.y, self.x + self.width, self.y + self.height)
-
-    def move(self, dx, dy):
-        return Ellipse(self.x + dx, self.y + dy, self.width, self.height)
-
-
-class Path(_BaseElement):
-    keys = ('vertices',)
-
-    @classmethod
-    def prepare(cls, vertices):
-        fixed_verts = tuple(remove_duplicates(vertices))
-        return {'vertices': fixed_verts }
-
-    @property
-    def bounds(self):
-        return bounding_box_around_points(self.vertices)
-
-    def move(self, dx, dy):
-        return Path(tuple((vx + dx, vy + dy) for vx, vy in self.vertices))
 
 
 class Link(_BaseElement):
-    keys = ('a', 'b')
+    def __init__(self, a, b):
+        assert isinstance(a, _BaseElement) and not isinstance(a, Link)
+        assert isinstance(b, _BaseElement) and not isinstance(a, Link)
+        self.a = a
+        self.b = b
+        super(Link, self).__init__(None)  # Link never has parent
 
-    @classmethod
-    def prepare(cls, a, b):
-        assert isinstance(a, _BaseElement), "must be valid element"
-        assert isinstance(b, _BaseElement), "must be valid element"
 
-    @property
-    def bounds(self):
-        a_x1, a_y1, a_x2, a_y2 = self.a.bounds
-        b_x1, b_y1, b_x2, b_y2 = self.b.bounds
-        x1, y1 = (a_x1 + a_x2) / 2, (a_y1 + a_y2) / 2
-        x2, y2 = (b_x1 + b_x2) / 2, (b_y1 + b_y2) / 2
-        # currently start and end point to center of target elements
-        # TODO: also remove workaround in CanvasModel.validate
-        return bounding_box_around_points([(x1, y1), (x2, y2)])
+class Rectangle(_BaseElement):
+    def __init__(self, x, y, width, height, parent=None):
+        self.x, self.y, self.width, self.height = fix_xywh(x, y, width, height)
+        super(Rectangle, self).__init__(parent)
 
     def move(self, dx, dy):
-        return self  # can't move yet, TODO
+        return self._replace(x=self.x + dx, y=self.y + dy)
+
+
+class Ellipse(_BaseElement):
+    def __init__(self, x, y, width, height, parent=None):
+        self.x, self.y, self.width, self.height = fix_xywh(x, y, width, height)
+        super(Ellipse, self).__init__(parent)
+
+    def move(self, dx, dy):
+        return self._replace(x=self.x + dx, y=self.y + dy)
+
+
+class Path(_BaseElement):
+    def __init__(self, vertices, parent=None):
+        self.vertices = tuple(remove_duplicates(vertices))
+        super(Path, self).__init__(parent)
+
+    def move(self, dx, dy):
+        new_verts = tuple((vx + dx, vy + dy) for vx, vy in self.vertices)
+        return self._replace(vertices=new_verts)

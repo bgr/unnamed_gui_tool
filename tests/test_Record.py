@@ -23,7 +23,7 @@ class Test_base_class:
     def test_replace_cannot_add_new_fields(self):
         r = Record()
         with pytest.raises(TypeError):
-            r.replace(x=2)
+            r._replace(x=2)
 
     def test_can_compare_with_another_Record(self):
         assert Record() == Record()
@@ -97,7 +97,7 @@ class Test_inheritance:
             def __init__(self, a, b, c=3, hello=4):
                 self.a, self.b, self.c, self.hello = a, b, c, hello
         b1 = B(1, 2, 5)
-        b2 = b1.replace(c=22)
+        b2 = b1._replace(c=22)
         assert (b1.a, b1.b, b1.c, b1.hello) == (1, 2, 5, 4)
         assert (b2.a, b2.b, b2.c, b2.hello) == (1, 2, 22, 4)
         assert b1._frozen
@@ -108,7 +108,7 @@ class Test_inheritance:
             def __init__(self, a, b, c=3, hello=4):
                 self.a, self.b, self.c, self.hello = a, b, c, hello
         b1 = B(1, 2, 5)
-        b2 = b1.replace(c=22, a=11)
+        b2 = b1._replace(c=22, a=11)
         assert (b1.a, b1.b, b1.c, b1.hello) == (1, 2, 5, 4)
         assert (b2.a, b2.b, b2.c, b2.hello) == (11, 2, 22, 4)
         assert b1._frozen
@@ -119,7 +119,7 @@ class Test_inheritance:
             def __init__(self, a, b, c=3, hello=4):
                 self.a, self.b, self.c, self.hello = a, b, c, hello
         b = B(1, 2, 5)
-        b2 = b.replace(c=22)
+        b2 = b._replace(c=22)
 
         with pytest.raises(TypeError):
             b.a = 3

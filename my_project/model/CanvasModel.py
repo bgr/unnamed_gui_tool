@@ -1,7 +1,7 @@
 import logging
 _log = logging.getLogger(__name__)
 
-from ..util import duplicates
+from ..util import duplicates, partition
 from ..events import Model_Changed
 from elements import Remove, Insert, Modify, _BaseElement, Link
 from query import CanvasSimpleQuery as CanvasQuery
@@ -53,7 +53,7 @@ class CanvasModel(object):
 
 
 def _commit(changes, changelog, eb, elems):
-    """Performs the changes to model's elements and informs listeners."""
+    """Updates elems, appends changes to changelog, notifies listeners."""
     validate(changes, elems)
 
     for ch in changes:
@@ -62,8 +62,7 @@ def _commit(changes, changelog, eb, elems):
         elif isinstance(ch, Insert):
             elems += [ch.elem]
         elif isinstance(ch, Modify):
-            old, new = ch
-            elems[elems.index(old)] = new
+            elems[elems.index(ch.elem)] = ch.modified
         else:
             assert False, "this cannot happen"
 
@@ -72,11 +71,86 @@ def _commit(changes, changelog, eb, elems):
     eb.dispatch(Model_Changed(changes[:]))
 
 
+def _move(what, dx, dy, existing):
+    """ Move element or elements by given offset.
+
+        Parameters
+        ----------
+        what : _BaseElement or list of _BaseElements
+            element or elements to move
+        dx : Number
+            horizontal offset by which to move element(s)
+        dy : Number
+            vertical offset by which to move element(s)
+        existing : list/set
+            elements currently in model, needed for finding children and links
+
+        Returns
+        -------
+        changelist : list
+            list of Modify changes, might contain more changes than number of
+            elements specified by 'what' argument
+
+        Raises
+        ------
+        ValueError if 'what' is not in 'existing'
+    """
+    if isinstance(what, _BaseElement):
+        what = [what]
+
+    is_elem = lambda e: isinstance(e, _BaseElement) and not isinstance(e, Link)
+    assert all(is_elem(el) for el in what), "elements only (but not links)"
+
+    def get_parents(el):
+        if el.parent is None:
+            return []
+        return [el.parent] + get_parents(el.parent)
+
+    # TODO: slow and wasteful, optimize
+    def get_children(par):
+        #return [el for el in existing if par in get_parents(el)]
+        return [el for el in existing if el.parent == par]
+
+    #all_parents = set(p for el in what for p in get_parents(el))
+    #print 'parents:', all_parents
+    #assert all(is_elem(p) for p in all_parents), "invalid parent"
+
+    parent_also_moved = lambda el: any(p in what for p in get_parents(el))
+
+    # children won't be moved, just updated to point to new parents
+    # roots will have updated coordinates, and their children updated
+    roots = [el for el in what if not parent_also_moved(el)]
+
+    def update_children(old_parent, new_parent):
+        orig_ch = get_children(old_parent)
+        ch_pairs = [(ch, ch._replace(parent=new_parent)) for ch in orig_ch]
+        gr_pairs = [g for o, n in ch_pairs for g in update_children(o, n)]
+        return ch_pairs + gr_pairs  # children and grandchildren pairs
+
+    root_pairs = [(r, r.move(dx, dy)) for r in roots]
+    ch_pairs = [p for o, n in root_pairs for p in update_children(o, n)]
+
+    return [Modify(old, new) for old, new in root_pairs + ch_pairs]
+
+
 
 def validate(changelist, existing):
-    """
-        Validates changes in changelist. Raises ValueError if something's not
-        valid, otherwise returns None.
+    """ Validates changes in changelist.
+
+        Parameters
+        ----------
+        changelist : list/tuple/set
+            list of changes, all must be of same type
+        existing : list/tuple/set
+            elements currently in model
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        ValueError if something's not valid
     """
     if not changelist:
         raise ValueError("Empty changelist")
@@ -134,6 +208,8 @@ def validate(changelist, existing):
 
     if any(len(el.bounds) != 4 for el in elems_mod + elems_ins):
         raise ValueError("Elements with invalid bounds tuple")
+
+    # TODO: this check should be done by elements themselves
     if any(el.bounds[2:] == el.bounds[:2] for el in elems_mod + elems_ins
            if not isinstance(el, Link)):  # TODO: remove this
         # (x1, y1) == (x2, y2) where bounds is tuple (x1, y1, x2, y2)
