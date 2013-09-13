@@ -9,7 +9,7 @@ from ...util import fseq
 
 
 
-def make(eb, view, event_pack, model_commit):
+def make(eb, view, event_pack, canvas_model):
     (Canvas_Down, Canvas_Up, Canvas_Right_Down, Canvas_Right_Up,
      Canvas_Middle_Down, Canvas_Middle_Up, Canvas_Move, Canvas_Wheel,
      Tool_Done) = event_pack
@@ -47,7 +47,7 @@ def make(eb, view, event_pack, model_commit):
         else:
             el = model.Ellipse(x, y, w, h)
             _log.info('about to commit ellipse {0}'.format(el))
-            model_commit([model.Insert(el)])
+            canvas_model.commit([model.Insert(el)])
         temp_elem_data[:] = []
 
     def dispatch_Tool_Done(*_):

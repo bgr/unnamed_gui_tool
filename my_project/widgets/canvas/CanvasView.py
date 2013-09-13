@@ -23,6 +23,7 @@ LINE_STROKE_WIDTH = 9
 # move drawing logic to CanvasElement
 # implement hittest in CanvasElement
 # get rid of draw_once
+# get rid of staticmethod CanvasElement.make
 # modifying should reuse CanvasElement instance
 
 
@@ -41,7 +42,7 @@ class CanvasView(JPanel):
 
 
     def add_elem(self, elem, repaint=False):
-        self._elems.update({ elem: CanvasElement(elem) })
+        self._elems.update({ elem: CanvasElement.make(elem, self) })
         if repaint:
             self.repaint()
 
@@ -84,8 +85,12 @@ class CanvasView(JPanel):
                 self._selected.remove(ch.elem)
 
         def modify(ch):
-            self.remove_elem(ch.elem, repaint=False)
-            self.add_elem(ch.modified, repaint=False)
+            cel = self._elems[ch.elem]
+            del self._elems[ch.elem]
+            self._elems[ch.modified] = cel
+            # line below will make CanvasElement update its shape property
+            # once it gets accessed next time
+            cel.elem = ch.modified
             if ch.elem in self._selected:
                 self._selected.remove(ch.elem)
                 self._selected.add(ch.modified)
@@ -107,7 +112,8 @@ class CanvasView(JPanel):
     @draw_once.setter
     def draw_once(self, elems):
         assert isinstance(elems, (list, tuple))
-        self._draw_once_elems = dict((el, CanvasElement(el)) for el in elems)
+        self._draw_once_elems = dict((el, CanvasElement.make(el, self))
+                                     for el in elems)
 
 
     @property
@@ -223,50 +229,32 @@ class CanvasView(JPanel):
 
 
 
-def rectangle(el):
-    return awt.geom.Rectangle2D.Double(el.x, el.y, el.width, el.height)
-
-
-def ellipse(el):
-    return awt.geom.Ellipse2D.Double(el.x, el.y, el.width, el.height)
-
-
-def path(el):
-    shape = awt.geom.Path2D.Float()
-    shape.moveTo(*el.vertices[0])
-    for v in el.vertices[1:]:
-        shape.lineTo(*v)
-    return shape
-
-# maps model elements to functions that create java.awt.Shape out of them
-shape_map = {
-    model.Ellipse: ellipse,
-    model.Rectangle: rectangle,
-    model.Path: path,
-    #model.Polygon: polygon,
-}
 
 
 class CanvasElement(object):
-    def __init__(self, elem):
-        assert elem.__class__ in shape_map.keys(), "unsupported element"
+    def __init__(self, elem, canvas):
         self._elem = elem
+        self._canvas = canvas
         self._must_update = True
 
     @property
     def elem(self):
         return self._elem
 
-    #@elem.setter
-    #def elem(self, new_elem):
-        #assert type(new_elem) == type(self.elem), "must be same type as old"
-        #self._elem = new_elem
-        #self._must_update = True
+    @elem.setter
+    def elem(self, new_elem):
+        assert type(new_elem) == type(self.elem), "must be same type as old"
+        self._elem = new_elem
+        self._must_update = True
+
+    @property
+    def canvas(self):
+        return self._canvas
 
     @property
     def shape(self):
         if self._must_update:  # elem was changed in the meantime
-            self._shape = shape_map[self.elem.__class__](self.elem)
+            self._shape = self._make_shape()
             self._must_update = False
         return self._shape
 
@@ -277,3 +265,65 @@ class CanvasElement(object):
 
     def __repr__(self):
         return '{0}({1})'.format(self.__class__.__name__, self.elem)
+
+    def _make_shape(self):
+        raise NotImplementedError("override me")
+
+    @staticmethod
+    def make(elem, canvas):
+        elem_map = {
+            model.Rectangle: Rectangle,
+            model.Ellipse: Ellipse,
+            model.Path: Path,
+            model.Link: Link,
+        }
+        return elem_map[elem.__class__](elem, canvas)
+
+
+
+
+class Rectangle(CanvasElement):
+    def __init__(self, elem, canvas):
+        assert isinstance(elem, model.Rectangle)
+        super(Rectangle, self).__init__(elem, canvas)
+
+    def _make_shape(self):
+        return awt.geom.Rectangle2D.Double(self.elem.x, self.elem.y,
+                                           self.elem.width, self.elem.height)
+
+
+class Ellipse(CanvasElement):
+    def __init__(self, elem, canvas):
+        assert isinstance(elem, model.Ellipse)
+        super(Ellipse, self).__init__(elem, canvas)
+
+    def _make_shape(self):
+        return awt.geom.Ellipse2D.Double(self.elem.x, self.elem.y,
+                                         self.elem.width, self.elem.height)
+
+
+class Path(CanvasElement):
+    def __init__(self, elem, canvas):
+        assert isinstance(elem, model.Path)
+        super(Path, self).__init__(elem, canvas)
+
+    def _make_shape(self):
+        shape = awt.geom.Path2D.Float()
+        shape.moveTo(*self.elem.vertices[0])
+        for v in self.elem.vertices[1:]:
+            shape.lineTo(*v)
+        return shape
+
+
+class Link(CanvasElement):
+    def __init__(self, elem, canvas):
+        assert isinstance(elem, model.Link)
+        super(Link, self).__init__(elem, canvas)
+
+    def _make_shape(self):
+        shape = awt.geom.Path2D.Float()
+        ax1, ay1, ax2, ay2 = self.canvas._elems[self.elem.a].bounds
+        bx1, by1, bx2, by2 = self.canvas._elems[self.elem.b].bounds
+        shape.moveTo((ax1 + ax2) / 2, (ay1 + ay2) / 2)
+        shape.lineTo((bx1 + bx2) / 2, (by1 + by2) / 2)
+        return shape

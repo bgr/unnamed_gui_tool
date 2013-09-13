@@ -71,6 +71,17 @@ def partition(ls, pred=lambda el: el):
     return (matched, unmatched)
 
 
+class Dummy(object):
+    def __init__(self, **kwargs):
+        self.__dict__ = kwargs.copy()
+        self._original_kwargs = kwargs.copy()
+
+    def reset(self):
+        tmp = self._original_kwargs
+        self.__dict__ = tmp.copy()
+        self._original_kwargs = tmp
+
+
 #def is_valid_identifier(str_val):
 #    return (not keyword.iskeyword(str_val) and
 #            re.match("[_A-Za-z][_a-zA-Z0-9]*$", str_val) is not None)

@@ -38,17 +38,51 @@ class CanvasModel(object):
         self.commit(old_changes + new_changes)
 
     def commit(self, changes):
+        """Updates elems, appends changes to changelog, notifies listeners."""
         _log.info('Model got changelist {0}'.format(
             ''.join(['\n * ' + str(ch) for ch in changes])))
 
         _commit(changes, self._changelog, self._eb, self._elems)
 
 
+    def move(self, what, dx, dy):
+        """ Move element(s) by given offset. Doesn't commit!
+            Returns changelist that has to be committed manually.
+        """
+        return _move(what, dx, dy, self._elems)
+
+
 
 
 def _commit(changes, changelog, eb, elems):
-    """Updates elems, appends changes to changelog, notifies listeners."""
-    validate(changes, elems)
+    """ Validates the changes and commits them to model, changing model elems.
+
+        Commit performs following actions:
+          * validates the given changes
+          * appends changes to changelog
+          * updates model elems
+          * notifies listeners about the changed elements
+
+        Parameters
+        ----------
+        changes : list
+            list of changes to be committed
+        changelog : list
+            list to append changes to
+        eb : EventBus
+            event bus on which to dispatch Model_Changed event
+        elems : list
+            elements currently in the model, used for validating
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        ValueError if validation fails
+    """
+    _validate(changes, elems)
 
     for ch in changes:
         if isinstance(ch, Remove):
@@ -66,7 +100,12 @@ def _commit(changes, changelog, eb, elems):
 
 
 def _move(what, dx, dy, existing):
-    """ Move element or elements by given offset.
+    """ Returns changelist that'll cause elements to be moved when committed.
+
+        Note that number of changed elements might be larger than number of
+        elements requested to be moved, e.g. when moving linked element, link
+        will be changed also, or when moving an element that contains children
+        elements, all of the children (and grandchildren) will be changed also.
 
         Parameters
         ----------
@@ -76,14 +115,14 @@ def _move(what, dx, dy, existing):
             horizontal offset by which to move element(s)
         dy : Number
             vertical offset by which to move element(s)
+
         existing : list/set
             elements currently in model, needed for finding children and links
 
         Returns
         -------
         changelist : list
-            list of Modify changes, might contain more changes than number of
-            elements specified by 'what' argument
+            list of Modify instanced
 
         Raises
         ------
@@ -141,7 +180,7 @@ def _move(what, dx, dy, existing):
 
 
 
-def validate(changelist, existing):
+def _validate(changelist, existing):
     """ Validates changes in changelist.
 
         Parameters

@@ -9,7 +9,7 @@ from ...util import fseq
 
 
 
-def make(eb, view, event_pack, model_commit):
+def make(eb, view, event_pack, canvas_model):
     """
         Returns separate states dicts and trans dict for idle and engaged tool
         behaviors as a tuple:
@@ -40,7 +40,7 @@ def make(eb, view, event_pack, model_commit):
         # is immutable
         path = model.Path(tuple(vertices))
         _log.info('about to commit path {0}'.format(path))
-        model_commit([model.Insert(path)])
+        canvas_model.commit([model.Insert(path)])
         eb.dispatch(Tool_Done())
         vertices[:] = []  # clear
 

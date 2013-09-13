@@ -5,11 +5,11 @@ from hsmpy import Initial, T, Choice, Internal
 
 from ...app import S
 from ... import model
-from ...util import fseq
+from ...util import fseq, Dummy
 
 
 
-def make(eb, view, event_pack, model_commit):
+def make(eb, view, event_pack, canvas_model):
     """
         Returns separate states dicts and trans dict for idle and engaged tool
         behaviors as a tuple:
@@ -40,10 +40,12 @@ def make(eb, view, event_pack, model_commit):
     }
 
 
-    mouse_coords = []
+    # use infinity to make sure no element matches by accident
+    data = Dummy(start_x=float('inf'),
+                 start_y=float('inf'))
 
-    def remember_mouse_coords(evt, _):
-        mouse_coords[:] = [evt.x, evt.y]
+    def remember_start_coords(evt, _):
+        data.start_x, data.start_y = evt.x, evt.y
 
     def elem_at(x, y):
         elems = view.elements_at(x, y)
@@ -53,10 +55,8 @@ def make(eb, view, event_pack, model_commit):
         elems = sorted(elems, key=lambda el: 0 if el in view.selection else 1)
         return next(iter(elems), None)
 
-    def whats_at_mouse_coords(*_):
-        if not mouse_coords:
-            return 'bg'
-        el = elem_at(*mouse_coords)
+    def whats_at_start_coords(*_):
+        el = elem_at(data.start_x, data.start_y)
         if el is None:
             return 'bg'
         elif el in view.selection:
@@ -71,8 +71,7 @@ def make(eb, view, event_pack, model_commit):
         view.selection = []
 
     def set_marquee(evt, _):
-        x, y = mouse_coords
-        view.marquee = (x, y, evt.x, evt.y)
+        view.marquee = (data.start_x, data.start_y, evt.x, evt.y)
 
     def clear_marquee(*_):
         view.marquee = None
@@ -81,21 +80,21 @@ def make(eb, view, event_pack, model_commit):
         view.repaint()
 
     def simulate_fake_move(evt, hsm):
-        x, y = mouse_coords
+        x, y = data.start_x, data.start_y
         dx, dy = evt.x - x, evt.y - y
-        moved = [el.move(dx / view.zoom, dy / view.zoom)
-                 for el in view.selection]
-        view.draw_once = moved
+        changes = canvas_model.move(view.selection,
+                                    dx / view.zoom, dy / view.zoom)
+        view.draw_once = changes
 
     def commit_real_move(evt, hsm):
-        x, y = mouse_coords
+        x, y = data.start_x, data.start_y
         dx, dy = evt.x - x, evt.y - y
         if (dx, dy) == (0, 0):
             _log.info('nothing to commit, moved by 0 px')
             return
-        changes = [model.Modify(el, el.move(dx / view.zoom, dy / view.zoom))
-                   for el in view.selection]
-        model_commit(changes)
+        changes = canvas_model.move(view.selection,
+                                    dx / view.zoom, dy / view.zoom)
+        canvas_model.commit(changes)
 
     def select_overlapped_elements(evt, hsm):
         assert view.marquee is not None
@@ -104,6 +103,7 @@ def make(eb, view, event_pack, model_commit):
         view.selection = elems
 
     def dispatch_Tool_Done(*_):
+        data.reset()
         eb.dispatch(Tool_Done())
 
 
@@ -113,9 +113,9 @@ def make(eb, view, event_pack, model_commit):
                 'bg': 'combo_over_background',
                 'sel': 'combo_over_selected_element',
                 'unsel': 'combo_over_unselected_element',
-            }, key=whats_at_mouse_coords, default='combo_over_background'),
+            }, key=whats_at_start_coords, default='combo_over_background'),
 
-            Canvas_Move: T('combo_idle', remember_mouse_coords),
+            Canvas_Move: T('combo_idle', remember_start_coords),
         },
         'combo_engaged': {
             # never called, should always transition directly to substates
@@ -125,14 +125,14 @@ def make(eb, view, event_pack, model_commit):
         'combo_over_background': {
             Canvas_Down: T('combo_dragging_marquee', fseq(
                 deselect_all,
-                remember_mouse_coords,
+                remember_start_coords,
                 set_marquee,
                 redraw_view)),
         },
         'combo_over_unselected_element': {
             Canvas_Down: T('combo_wait_for_drag_selection', fseq(
                 select_elem_under_cursor,
-                remember_mouse_coords,
+                remember_start_coords,
                 redraw_view)),
         },
         'combo_over_selected_element': {
@@ -161,7 +161,7 @@ def make(eb, view, event_pack, model_commit):
             Canvas_Up: Internal(fseq(
                 commit_real_move,
                 redraw_view,
-                remember_mouse_coords,  # so that next Initial can detect under
+                remember_start_coords,  # so that next Initial can detect under
                 dispatch_Tool_Done)),
         }
     }

@@ -8,11 +8,11 @@ from hsmpy import Event, Initial, T, Internal, Choice
 from ...app import S
 from ...util import join_dicts, fseq
 from ...events import (WrappedEvent, Tool_Changed, Model_Changed,
-                       PATH_TOOL, COMBO_TOOL, ELLIPSE_TOOL)
+                       PATH_TOOL, COMBO_TOOL, ELLIPSE_TOOL, LINK_TOOL)
 from CanvasView import CanvasView
 
 # tool behaviors are defined using sub-HSMs in separate modules:
-from . import path_tool, combo_tool, ellipse_tool
+from . import path_tool, combo_tool, ellipse_tool, link_tool
 
 
 ZOOM_IN_FACTOR = 1.15
@@ -80,27 +80,32 @@ def make(eventbus, canvas_model):
                   Canvas_Middle_Down, Canvas_Middle_Up, Canvas_Move,
                   Canvas_Wheel, Tool_Done]
 
-    path_idle, path_engaged, path_trans = path_tool.make(
-        eventbus, view, event_pack, canvas_model.commit)
+    link_idle, link_engaged, link_trans = link_tool.make(
+        eventbus, view, event_pack, canvas_model)
 
     combo_idle, combo_engaged, combo_trans = combo_tool.make(
-        eventbus, view, event_pack, canvas_model.commit)
+        eventbus, view, event_pack, canvas_model)
 
     ellipse_idle, ellipse_engaged, ellipse_trans = ellipse_tool.make(
-        eventbus, view, event_pack, canvas_model.commit)
+        eventbus, view, event_pack, canvas_model)
+
+    path_idle, path_engaged, path_trans = path_tool.make(
+        eventbus, view, event_pack, canvas_model)
 
 
     states = {
         'top': S(on_enter=set_up, states={
             'idle': S(join_dicts(
                 combo_idle,
-                path_idle,
+                link_idle,
                 ellipse_idle,
+                path_idle,
             )),
             'engaged': S(join_dicts(
                 combo_engaged,
-                path_engaged,
+                link_engaged,
                 ellipse_engaged,
+                path_engaged,
             )),
             'panning': S(),
         })
@@ -137,9 +142,10 @@ def make(eventbus, canvas_model):
 
 
     trans = join_dicts(
-        path_trans,
         combo_trans,
+        link_trans,
         ellipse_trans,
+        path_trans,
         {
             'top': {
                 Initial: T('idle'),
@@ -154,8 +160,9 @@ def make(eventbus, canvas_model):
                 Initial: Choice(
                     {
                         COMBO_TOOL: 'combo_idle',
-                        PATH_TOOL: 'path_idle',
+                        LINK_TOOL: 'link_idle',
                         ELLIPSE_TOOL: 'ellipse_idle',
+                        PATH_TOOL: 'path_idle',
                         # TODO: reorganize code, referencing state name that's
                         # not specified in this file = ugly
                     },
