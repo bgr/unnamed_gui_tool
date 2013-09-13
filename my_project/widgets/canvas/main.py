@@ -56,7 +56,7 @@ def make(eventbus, canvas_model):
         return dispatcher
 
 
-    view = CanvasView(300, 300, canvas_model.query)
+    view = CanvasView(300, 300)
     view.mousePressed = make_dispatcher('down')
     view.mouseReleased = make_dispatcher('up')
     view.mouseMoved = lambda evt: eventbus.dispatch(Canvas_Move(evt))

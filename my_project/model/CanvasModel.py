@@ -1,10 +1,9 @@
 import logging
 _log = logging.getLogger(__name__)
 
-from ..util import duplicates, partition
+from ..util import duplicates
 from ..events import Model_Changed
 from elements import Remove, Insert, Modify, _BaseElement, Link
-from query import CanvasSimpleQuery as CanvasQuery
 
 
 
@@ -13,7 +12,6 @@ class CanvasModel(object):
         self._elems = []
         self._changelog = []
         self._eb = eventbus
-        self._query = CanvasQuery(self)
 
     @property
     def elems(self):
@@ -44,10 +42,6 @@ class CanvasModel(object):
             ''.join(['\n * ' + str(ch) for ch in changes])))
 
         _commit(changes, self._changelog, self._eb, self._elems)
-
-    @property
-    def query(self):
-        return self._query
 
 
 

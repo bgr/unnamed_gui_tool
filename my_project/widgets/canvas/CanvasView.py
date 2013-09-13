@@ -1,5 +1,6 @@
 import java.awt as awt
 from javax.swing import JPanel
+from quadpy.quadtree import fits, overlaps, fix_bounds
 
 from ... import model
 
@@ -14,31 +15,39 @@ MARQUEE_FILL_COLOR = awt.Color(100, 100, 255, 40)
 LINE_STROKE_WIDTH = 9
 
 
+# TODO:
+# switch to quadtree completely (under, overlapping, enclosed)
+# implement marquee using CanvasElement
+# repaint dirty regions only
+# stroke color logic should be implemented in CanvasElement
+# move drawing logic to CanvasElement
+# implement hittest in CanvasElement
+# get rid of draw_once
+# modifying should reuse CanvasElement instance
+
+
 class CanvasView(JPanel):
 
-    # TODO: query functionality maybe should be moved from model to here
-    def __init__(self, width, height, query):
+    def __init__(self, width, height):
         super(self.__class__, self).__init__()
         self.size = (width, height)
         self.preferredSize = (width, height)
-        self._elems = []
-        self.query = query
 
-        self._elems = []
-        self._draw_once_elems = []
+        self._elems = {}
+        self._draw_once_elems = {}
         self._selected = set([])
         self._marquee = None
         self._transform = awt.geom.AffineTransform()
 
 
     def add_elem(self, elem, repaint=False):
-        self._elems += [elem]
+        self._elems.update({ elem: CanvasElement(elem) })
         if repaint:
             self.repaint()
 
 
     def remove_elem(self, elem, repaint=False):
-        self._elems.remove(elem)
+        del self._elems[elem]
         if repaint:
             self.repaint()
 
@@ -62,12 +71,7 @@ class CanvasView(JPanel):
         if rect_tuple is None:
             self._marquee = None
             return
-        x1, y1, x2, y2 = rect_tuple
-        if x2 < x1:
-            x1, x2 = x2, x1
-        if y2 < y1:
-            y1, y2 = y2, y1
-        self._marquee = (x1, y1, x2, y2)
+        self._marquee = fix_bounds(rect_tuple)
 
 
     def apply_changes(self, changes):
@@ -103,7 +107,7 @@ class CanvasView(JPanel):
     @draw_once.setter
     def draw_once(self, elems):
         assert isinstance(elems, (list, tuple))
-        self._draw_once_elems = list(elems)
+        self._draw_once_elems = dict((el, CanvasElement(el)) for el in elems)
 
 
     @property
@@ -131,7 +135,6 @@ class CanvasView(JPanel):
 
 
     def paintComponent(self, g):
-        # TODO: repaint only changed regions
         g.color = self.background
         g.fillRect(0, 0, self.width, self.height)
 
@@ -145,18 +148,17 @@ class CanvasView(JPanel):
         new_trans.concatenate(self._transform)
         g.setTransform(new_trans)
 
-        for el in self._elems + self._draw_once_elems:
-            if el in self._selected:
+        for cel in self._elems.values() + self._draw_once_elems.values():
+            if cel.elem in self._selected:
                 stroke, fill = SELECTED_STROKE_COLOR, SELECTED_FILL_COLOR
             else:
                 stroke, fill = ELEMENT_STROKE_COLOR, ELEMENT_FILL_COLOR
-            sh = shape(el)
             g.color = fill
-            g.fill(sh) if not isinstance(el, model.Path) else None
+            g.fill(cel.shape) if not isinstance(cel.elem, model.Path) else None
             g.color = stroke
-            g.draw(sh)
+            g.draw(cel.shape)
 
-        self._draw_once_elems = []
+        self.draw_once = []
         g.setTransform(old_trans)
 
         if self._marquee:
@@ -169,40 +171,65 @@ class CanvasView(JPanel):
 
     def elements_at(self, x, y):
         x, y = self.transformed(x, y)
-        elems = self.query.under(x, y)  # coarse, checks against bounding boxes
+        cels = self._under(x, y)  # coarse, checks against bounding boxes
 
-        def check(el):  # precise, checks using java.awt.Shape
-            sh = shape(el)
-            if isinstance(el, model.Path):
+        def check(cel):  # precise, checks using java.awt.Shape
+            sh = cel.shape
+            if isinstance(cel.elem, model.Path):
                 # have to check against the stroke since Java's path is
                 # implicitly closed and behaves like a polygon
                 stroke_width = LINE_STROKE_WIDTH / self.zoom
                 sh = awt.BasicStroke(stroke_width).createStrokedShape(sh)
             return sh.contains(x, y)
 
-        return [el for el in elems if check(el)]
+        return [cel.elem for cel in cels if check(cel)]
+
 
     def elements_overlapping(self, x1, y1, x2, y2):
         x1, y1 = self.transformed(x1, y1)
         x2, y2 = self.transformed(x2, y2)
-        elems = self.query.overlapped(x1, y1, x2, y2)
+        cels = self._overlapped(x1, y1, x2, y2)
 
-        def check(el):
-            sh = shape(el)
-            if isinstance(el, model.Path):
+        def check(cel):
+            sh = cel.shape
+            if isinstance(cel.elem, model.Path):
                 stroke_width = LINE_STROKE_WIDTH / self.zoom
                 sh = awt.BasicStroke(stroke_width).createStrokedShape(sh)
             return sh.intersects(x1, y1, x2 - x1, y2 - y1)
 
-        return [el for el in elems if check(el)]
+        return [cel.elem for cel in cels if check(cel)]
+
+    def _under(self, x, y):
+        def is_under(cel):  # TODO: switch to quadtree
+            el_x1, el_y1, el_x2, el_y2 = cel.bounds
+            return (el_x1 <= x <= el_x2) and (el_y1 <= y <= el_y2)
+
+        res = filter(is_under, self._elems.values())
+        return res
+
+    def _enclosed(self, x1, y1, x2, y2):
+        def is_enclosed(cel):  # TODO: switch to quadtree
+            return fits(cel.bounds, (x1, y1, x2, y2))
+
+        res = filter(is_enclosed, self._elems.values())
+        return res
+
+    def _overlapped(self, x1, y1, x2, y2):
+        def is_overlapped(cel):  # TODO: switch to quadtree
+            return overlaps(cel.bounds, (x1, y1, x2, y2))
+
+        res = filter(is_overlapped, self._elems.values())
+        return res
 
 
 
 def rectangle(el):
     return awt.geom.Rectangle2D.Double(el.x, el.y, el.width, el.height)
 
+
 def ellipse(el):
     return awt.geom.Ellipse2D.Double(el.x, el.y, el.width, el.height)
+
 
 def path(el):
     shape = awt.geom.Path2D.Float()
@@ -210,7 +237,6 @@ def path(el):
     for v in el.vertices[1:]:
         shape.lineTo(*v)
     return shape
-
 
 # maps model elements to functions that create java.awt.Shape out of them
 shape_map = {
@@ -220,5 +246,34 @@ shape_map = {
     #model.Polygon: polygon,
 }
 
-def shape(model_element):
-    return shape_map[model_element.__class__](model_element)
+
+class CanvasElement(object):
+    def __init__(self, elem):
+        assert elem.__class__ in shape_map.keys(), "unsupported element"
+        self._elem = elem
+        self._must_update = True
+
+    @property
+    def elem(self):
+        return self._elem
+
+    #@elem.setter
+    #def elem(self, new_elem):
+        #assert type(new_elem) == type(self.elem), "must be same type as old"
+        #self._elem = new_elem
+        #self._must_update = True
+
+    @property
+    def shape(self):
+        if self._must_update:  # elem was changed in the meantime
+            self._shape = shape_map[self.elem.__class__](self.elem)
+            self._must_update = False
+        return self._shape
+
+    @property
+    def bounds(self):
+        b = self.shape.getBounds()
+        return b.x, b.y, b.x + b.width, b.y + b.height
+
+    def __repr__(self):
+        return '{0}({1})'.format(self.__class__.__name__, self.elem)
