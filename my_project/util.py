@@ -75,6 +75,8 @@ class Dummy(object):
     def __init__(self, **kwargs):
         self.__dict__ = kwargs.copy()
         self._original_kwargs = kwargs.copy()
+        for v in kwargs.values():
+            hash(v)  # cause error on unhashable values
 
     def reset(self):
         tmp = self._original_kwargs

@@ -48,3 +48,20 @@ class Test_Dummy():
         assert d.x == 3
         assert d.abcd == 'abcd'
         assert not hasattr(d, 'new')
+
+    #def test_reset_with_list_value(self):
+    #    d = Dummy(x=[])
+    #    assert d.x == []
+    #    assert d.__dict__ == { 'x': [], '_original_kwargs': { 'x': [], } }
+
+    #    d.x.append(3)
+    #    assert d.x == [3]
+    #    assert d.__dict__ == { 'x': [3], '_original_kwargs': { 'x': [], } }
+
+    #    d.reset()
+    #    assert d.x == []
+    #    assert d.__dict__ == { 'x': [], '_original_kwargs': { 'x': [], } }
+
+    def test_raise_on_unhashable_values(self):
+        with pytest.raises(TypeError):
+            Dummy(x=[])

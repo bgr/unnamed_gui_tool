@@ -6,10 +6,11 @@ from hsmpy import Initial, T, Internal, Choice
 from ...app import S
 from ... import model
 from ...util import fseq, Dummy
+from elements import LinkCE, PathCE
 
 
 
-def make(eb, view, event_pack, canvas_model):
+def make(eb, view, event_pack, elem_map, canvas_model):
     """
         Returns separate states dicts and trans dict for idle and engaged tool
         behaviors as a tuple:
@@ -28,7 +29,8 @@ def make(eb, view, event_pack, canvas_model):
                  end_x=float('inf'),
                  end_y=float('inf'),
                  start_elem=None,
-                 end_elem=None)
+                 end_elem=None,
+                 preview=None)
 
     def remember_start_coords_and_elem(evt, _):
         data.start_x, data.start_y = evt.x, evt.y
@@ -46,30 +48,43 @@ def make(eb, view, event_pack, canvas_model):
 
     def elem_at(x, y):
         elems = view.elements_at(x, y)
-        el = next(iter(elems), None)
-        # prevent linking Link to another Link
-        return el if not isinstance(el, model.Link) else None
+        cel = next(iter(elems), None)
+        # prevent linking Link to another Link or fake preview element
+        if cel is None or cel is data.preview or isinstance(cel, LinkCE):
+            return None
+        else:
+            return cel.elem
 
-    def prepare_preview(evt, hsm):
-        if data.end_elem:  # preview link
-            link = model.Link(data.start_elem, data.end_elem)
-            view.draw_once = [link]
-        else:  # preview straight line
+    def update_preview(evt, hsm):
+        # remove old preview if it exists, since new might not be same type
+        view.remove(data.preview) if data.preview else ''
+        # preview is a link if mouse is over element
+        if data.end_elem:
+            elem = model.Link(data.start_elem, data.end_elem)
+            start_cel = elem_map[data.start_elem]
+            end_cel = elem_map[data.end_elem]
+            data.preview = LinkCE(elem, start_cel, end_cel, view)
+        # otherwise it's a straight line
+        else:
             verts = ((data.start_x, data.start_y), (data.end_x, data.end_y))
-            path = model.Path(verts)
-            view.draw_once = [path]
+            elem = model.Path(verts)
+            data.preview = PathCE(elem, view)
+        view.add(data.preview)
 
     def redraw_view(*_):
         view.repaint()
 
-    def commit_link(*_):
+    def commit_link_to_model(*_):
         link = model.Link(data.start_elem, data.end_elem)
         _log.info('about to commit link {0}'.format(link))
         canvas_model.commit([model.Insert(link)])
 
     def signalize_finished(*_):
-        data.reset()
         eb.dispatch(Tool_Done())
+
+    def clean_up(*_):
+        view.remove(data.preview) if data.preview else ''
+        data.reset()
 
 
     idle = {
@@ -80,7 +95,7 @@ def make(eb, view, event_pack, canvas_model):
     }
 
     engaged = {
-        'link_engaged': S({
+        'link_engaged': S(on_exit=clean_up, states={
             'link_wait_for_move': S(),
             'link_drawing': S({
                 'link_drawing_over_background': S(),
@@ -122,7 +137,7 @@ def make(eb, view, event_pack, canvas_model):
             }, key=whats_at_end_coords, default='link_drawing_over_element'),
             Canvas_Move: T('link_drawing', fseq(
                 remember_end_coords_and_elem,
-                prepare_preview,
+                update_preview,
                 redraw_view)),
         },
         'link_drawing_over_background': {
@@ -130,7 +145,7 @@ def make(eb, view, event_pack, canvas_model):
         },
         'link_drawing_over_element': {
             Canvas_Up: Internal(fseq(
-                commit_link,
+                commit_link_to_model,
                 signalize_finished,))
         },
     }

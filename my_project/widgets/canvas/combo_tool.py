@@ -1,15 +1,31 @@
 import logging
 _log = logging.getLogger(__name__)
 
+import java.awt as awt
 from hsmpy import Initial, T, Choice, Internal
 
 from ...app import S
 from ... import model
 from ...util import fseq, Dummy
+from elements import RectangleCE
+
+
+#MARQUEE_STROKE_COLOR = awt.Color.BLUE
+MARQUEE_FILL_COLOR = awt.Color(100, 100, 255, 40)
+
+
+class MarqueeCE(RectangleCE):
+    @property
+    def fill_color(self):
+        return MARQUEE_FILL_COLOR
+
+    @property
+    def stroke_color(self):
+        return None
 
 
 
-def make(eb, view, event_pack, canvas_model):
+def make(eb, view, event_pack, elem_map, canvas_model):
     """
         Returns separate states dicts and trans dict for idle and engaged tool
         behaviors as a tuple:
@@ -22,6 +38,108 @@ def make(eb, view, event_pack, canvas_model):
      Canvas_Middle_Down, Canvas_Middle_Up, Canvas_Move, Canvas_Wheel,
      Tool_Done) = event_pack
 
+    # use infinity to make sure no element matches by accident
+    data = Dummy(start_x=float('inf'),
+                 start_y=float('inf'),
+                 marquee=None,
+                 moved=())
+
+    selection = []  # this one keeps elements after tool has finished
+
+    def set_selection(canvas_elems):
+        assert isinstance(canvas_elems, (list, tuple))
+        for cel in selection:
+            cel.is_selected = False
+        selection[:] = canvas_elems
+        for cel in selection:
+            assert cel.elem in canvas_model.elems, cel
+            cel.is_selected = True
+
+    def remember_start_coords(evt, _):
+        data.start_x, data.start_y = evt.x, evt.y
+
+    def elem_at(x, y):
+        celems = view.elements_at(x, y)
+        # sort so that already selected elements are at the beginning of list
+        # that's useful when trying to click already selected element which
+        # happens to be under unselected elem
+        celems = sorted(celems, key=lambda cel: 0 if cel.is_selected else 1)
+        return next(iter(celems), None)
+
+    def whats_at_start_coords(*_):
+        cel = elem_at(data.start_x, data.start_y)
+        # FIXME: not working after commit since data has been reset
+        if cel is None:
+            return 'bg'
+        elif cel.is_selected:
+            return 'sel'
+        else:
+            return 'unsel'
+
+    def select_elem_under_cursor(evt, hsm):
+        cel = elem_at(evt.x, evt.y)
+        set_selection([cel])
+
+    def deselect_all(*_):
+        set_selection([])
+
+    def set_marquee(evt, _):
+        x, y = view.transformed(data.start_x, data.start_y)
+        ex, ey = view.transformed(evt.x, evt.y)
+        rect = model.Rectangle(x, y, ex - x, ey - y + 1)  # prevents 0 w/h err
+        if data.marquee is not None:
+            data.marquee.elem = rect
+        else:
+            data.marquee = MarqueeCE(rect, view)
+            view.add(data.marquee)
+
+    def clear_marquee(*_):
+        if data.marquee:
+            view.remove(data.marquee)
+            data.marquee = None
+
+    def redraw_view(*_):
+        view.repaint()
+
+    def simulate_move(evt, hsm):
+        x, y = data.start_x, data.start_y
+        dx, dy = evt.x - x, evt.y - y
+        if not data.moved:
+            data.moved = tuple((cel.elem, cel) for cel in selection)
+        for orig_el, cel in data.moved:
+            cel.elem = orig_el.move(dx / view.zoom, dy / view.zoom)
+
+    def undo_simulated_move(*_):
+        for orig_el, cel in data.moved:
+            cel.elem = orig_el
+        data.moved = ()
+
+    def commit_real_move(evt, hsm):
+        x, y = data.start_x, data.start_y
+        dx, dy = evt.x - x, evt.y - y
+        if (dx, dy) == (0, 0):
+            _log.info('nothing to commit, moved by 0 px')
+            return
+        changes = canvas_model.move([cel.elem for cel in selection],
+                                    dx / view.zoom, dy / view.zoom)
+        canvas_model.commit(changes)
+
+    def select_overlapped_elements(evt, hsm):
+        x, y = data.start_x, data.start_y
+        ex, ey = evt.x, evt.y
+        elems = view.elements_overlapping(x, y, ex, ey)
+        elems.remove(data.marquee) if data.marquee in elems else ''
+        set_selection(elems)
+        _log.info('marquee overlapped {0} elems'.format(len(selection)))
+
+    def signalize_finished(*_):
+        eb.dispatch(Tool_Done())
+
+    def clean_up(*_):
+        undo_simulated_move()
+        clear_marquee()
+        data.reset()
+
 
     idle = {
         'combo_idle': S({
@@ -32,79 +150,12 @@ def make(eb, view, event_pack, canvas_model):
     }
 
     engaged = {
-        'combo_engaged': S({
+        'combo_engaged': S(on_exit=clean_up, states={
             'combo_dragging_marquee': S(),
             'combo_wait_for_drag_selection': S(),
             'combo_dragging_selection': S(),
         }),
     }
-
-
-    # use infinity to make sure no element matches by accident
-    data = Dummy(start_x=float('inf'),
-                 start_y=float('inf'))
-
-    def remember_start_coords(evt, _):
-        data.start_x, data.start_y = evt.x, evt.y
-
-    def elem_at(x, y):
-        elems = view.elements_at(x, y)
-        # sort so that already selected elements are at the beginning of list
-        # that's useful when trying to click already selected element which
-        # happens to be under unselected elem
-        elems = sorted(elems, key=lambda el: 0 if el in view.selection else 1)
-        return next(iter(elems), None)
-
-    def whats_at_start_coords(*_):
-        el = elem_at(data.start_x, data.start_y)
-        if el is None:
-            return 'bg'
-        elif el in view.selection:
-            return 'sel'
-        else:
-            return 'unsel'
-
-    def select_elem_under_cursor(evt, hsm):
-        view.selection = [elem_at(evt.x, evt.y)]
-
-    def deselect_all(*_):
-        view.selection = []
-
-    def set_marquee(evt, _):
-        view.marquee = (data.start_x, data.start_y, evt.x, evt.y)
-
-    def clear_marquee(*_):
-        view.marquee = None
-
-    def redraw_view(*_):
-        view.repaint()
-
-    def simulate_fake_move(evt, hsm):
-        x, y = data.start_x, data.start_y
-        dx, dy = evt.x - x, evt.y - y
-        changes = canvas_model.move(view.selection,
-                                    dx / view.zoom, dy / view.zoom)
-        view.draw_once = changes
-
-    def commit_real_move(evt, hsm):
-        x, y = data.start_x, data.start_y
-        dx, dy = evt.x - x, evt.y - y
-        if (dx, dy) == (0, 0):
-            _log.info('nothing to commit, moved by 0 px')
-            return
-        changes = canvas_model.move(view.selection,
-                                    dx / view.zoom, dy / view.zoom)
-        canvas_model.commit(changes)
-
-    def select_overlapped_elements(evt, hsm):
-        assert view.marquee is not None
-        elems = view.elements_overlapping(*view.marquee)
-        _log.info('marquee overlapped {0} elements'.format(len(elems)))
-        view.selection = elems
-
-    def dispatch_Tool_Done(*_):
-        data.reset()
-        eb.dispatch(Tool_Done())
 
 
     trans = {
@@ -147,22 +198,23 @@ def make(eb, view, event_pack, canvas_model):
                 select_overlapped_elements,
                 clear_marquee,
                 redraw_view,
-                dispatch_Tool_Done)),
+                signalize_finished)),
         },
 
         'combo_wait_for_drag_selection': {
             Canvas_Move: T('combo_dragging_selection'),
-            Canvas_Up: Internal(dispatch_Tool_Done),  # nothing done, cancel
+            Canvas_Up: Internal(signalize_finished),  # nothing done, cancel
         },
         'combo_dragging_selection': {
             Canvas_Move: Internal(fseq(
-                simulate_fake_move,
+                simulate_move,
                 redraw_view)),
             Canvas_Up: Internal(fseq(
+                undo_simulated_move,
                 commit_real_move,
                 redraw_view,
                 remember_start_coords,  # so that next Initial can detect under
-                dispatch_Tool_Done)),
+                signalize_finished)),
         }
     }
 

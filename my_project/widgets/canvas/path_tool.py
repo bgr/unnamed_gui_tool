@@ -1,15 +1,16 @@
 import logging
 _log = logging.getLogger(__name__)
 
-from hsmpy import Initial, T, Internal
+from hsmpy import T, Internal
 
 from ...app import S
 from ... import model
-from ...util import fseq
+from ...util import fseq, Dummy
+from elements import PathCE
 
 
 
-def make(eb, view, event_pack, canvas_model):
+def make(eb, view, event_pack, elem_map, canvas_model):
     """
         Returns separate states dicts and trans dict for idle and engaged tool
         behaviors as a tuple:
@@ -22,32 +23,43 @@ def make(eb, view, event_pack, canvas_model):
      Canvas_Middle_Down, Canvas_Middle_Up, Canvas_Move, Canvas_Wheel,
      Tool_Done) = event_pack
 
-    # temporary holder objects used while the path is still being drawn
-    vertices = []
+    data = Dummy(vertices=(),
+                 preview=None)
+
 
     def add_vertex(evt, hsm):
-        vertices.append( view.transformed(evt.x, evt.y) )
-        _log.info('added vertex {0}, all: {1}'.format(vertices[-1], vertices))
+        new = view.transformed(evt.x, evt.y)
+        data.vertices = data.vertices + (new,)
+        _log.info('added vertex {0}, all: {1}'.format(data.vertices[-1],
+                                                      data.vertices))
         # TODO: make sure that no two successive vertices have same coords
 
-    def update_last_segment(evt, hsm):
-        vertices[-1] = view.transformed(evt.x, evt.y)
+    def move_last_vertex(evt, _):
+        new = view.transformed(evt.x, evt.y)
+        data.vertices = data.vertices[:-1] + (new,)
 
-    def commit_and_finish(hsm):
-        # work around "TypeError: unhashable type list" that arrises in
-        # util.duplicates when model.parse checks for duplicate elements since
-        # vertices list is unhashable and also makes model safer since tuple
-        # is immutable
-        path = model.Path(tuple(vertices))
+    def update_preview(*_):
+        path = model.Path(data.vertices)
+        if data.preview:
+            data.preview.elem = path
+        else:
+            data.preview = PathCE(path, view)
+            view.add(data.preview)
+
+    def redraw_view(*_):
+        view.repaint()
+
+    def commit_to_model(*_):
+        path = model.Path(data.vertices)
         _log.info('about to commit path {0}'.format(path))
         canvas_model.commit([model.Insert(path)])
-        eb.dispatch(Tool_Done())
-        vertices[:] = []  # clear
 
-    def redraw_path(evt, hsm):
-        path = model.Path(tuple(vertices))
-        view.draw_once = [path]
-        view.repaint()
+    def signalize_finished(*_):
+        eb.dispatch(Tool_Done())
+
+    def clean_up(*_):
+        view.remove(data.preview) if data.preview else ''
+        data.reset()
 
 
     idle = {
@@ -55,24 +67,24 @@ def make(eb, view, event_pack, canvas_model):
     }
 
     engaged = {
-        'path_engaged': S({
-            'path_drawing': S(),
-            'path_finished': S(on_enter=commit_and_finish),
-        }),
+        'path_engaged': S(on_exit=clean_up),
     }
 
     trans = {
         'path_idle': {
-            Canvas_Down: T('path_drawing',   # add 2 vertices to make a segment
+            Canvas_Down: T('path_engaged',   # add 2 vertices to make a segment
                            action=fseq(add_vertex, add_vertex)),
         },
         'path_engaged': {
-            Initial: T('path_drawing'),
-        },
-        'path_drawing': {
-            Canvas_Move: Internal(fseq( update_last_segment, redraw_path )),
-            Canvas_Down: T('path_drawing', add_vertex),
-            Canvas_Right_Down: T('path_finished', add_vertex),
+            Canvas_Move: Internal(fseq(
+                move_last_vertex,
+                update_preview,
+                redraw_view)),
+            Canvas_Down: Internal(add_vertex),
+            Canvas_Right_Down: Internal(fseq(
+                add_vertex,
+                commit_to_model,
+                signalize_finished))
         },
     }
 

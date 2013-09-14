@@ -1,20 +1,20 @@
 import logging
 _log = logging.getLogger(__name__)
 
-from javax.swing import SwingUtilities as SwU
-
 from hsmpy import Event, Initial, T, Internal, Choice
 
 from ...app import S
 from ...util import join_dicts, fseq
 from ...events import (WrappedEvent, Tool_Changed, Model_Changed,
                        PATH_TOOL, COMBO_TOOL, ELLIPSE_TOOL, LINK_TOOL)
-from CanvasView import CanvasView
-
+from ... import model
+from view import CanvasView
+from elements import CanvasModelElement
 # tool behaviors are defined using sub-HSMs in separate modules:
 from . import path_tool, combo_tool, ellipse_tool, link_tool
 
 
+DEFAULT_TOOL = COMBO_TOOL
 ZOOM_IN_FACTOR = 1.15
 
 
@@ -38,7 +38,7 @@ def make(eventbus, canvas_model):
     class Canvas_Wheel(WrappedEvent): pass
     class Tool_Done(Event): pass
 
-    def make_dispatcher(up_or_down):
+    def make_dispatcher(button_up_or_down):
         clsmap = {
             ('down', 1): Canvas_Down,
             ('down', 2): Canvas_Middle_Down,
@@ -49,7 +49,7 @@ def make(eventbus, canvas_model):
         }
 
         def dispatcher(evt):
-            Cls = clsmap.get( (up_or_down, evt.button) )
+            Cls = clsmap.get( (button_up_or_down, evt.button) )
             if Cls:
                 eventbus.dispatch(Cls(evt))
 
@@ -63,10 +63,16 @@ def make(eventbus, canvas_model):
     view.mouseDragged = view.mouseMoved
     view.mouseWheelMoved = lambda evt: eventbus.dispatch(Canvas_Wheel(evt))
 
-    for el in canvas_model.elems:
-        view.add_elem(el)
+    # this dict will be used by HSMs to get CanvasElement instance for any
+    # model element
+    elem_map = dict((el, CanvasModelElement.make(el, view))
+                    for el in canvas_model.elems)
 
-    DEFAULT_TOOL = COMBO_TOOL
+    # draw elements that are already in the model
+    for el in elem_map.values():
+        view.add(el)
+    view.repaint()
+
 
     def set_up(hsm):
         hsm.data.canvas_tool = DEFAULT_TOOL
@@ -80,17 +86,17 @@ def make(eventbus, canvas_model):
                   Canvas_Middle_Down, Canvas_Middle_Up, Canvas_Move,
                   Canvas_Wheel, Tool_Done]
 
-    link_idle, link_engaged, link_trans = link_tool.make(
-        eventbus, view, event_pack, canvas_model)
-
     combo_idle, combo_engaged, combo_trans = combo_tool.make(
-        eventbus, view, event_pack, canvas_model)
+        eventbus, view, event_pack, elem_map, canvas_model)
+
+    link_idle, link_engaged, link_trans = link_tool.make(
+        eventbus, view, event_pack, elem_map, canvas_model)
 
     ellipse_idle, ellipse_engaged, ellipse_trans = ellipse_tool.make(
-        eventbus, view, event_pack, canvas_model)
+        eventbus, view, event_pack, elem_map, canvas_model)
 
     path_idle, path_engaged, path_trans = path_tool.make(
-        eventbus, view, event_pack, canvas_model)
+        eventbus, view, event_pack, elem_map, canvas_model)
 
 
     states = {
@@ -111,8 +117,35 @@ def make(eventbus, canvas_model):
         })
     }
 
-    def update_view_with_changes(evt, _):
-        view.apply_changes(evt.data)
+    def apply_changes(evt, _):
+        def insert(ch):
+            new_cel = CanvasModelElement.make(ch.elem, view)
+            elem_map[ch.elem] = new_cel
+            view.add(new_cel)
+
+        def remove(ch):
+            cel = elem_map[ch.elem]
+            view.remove(cel)
+            del elem_map[ch.elem]
+            assert False, "must remove from selected list, with modify also!"
+
+        def modify(ch):
+            cel = elem_map[ch.elem]
+            del elem_map[ch.elem]
+            elem_map[ch.modified] = cel
+            # line below will make CanvasElement update its shape property
+            # once it gets accessed next time
+            cel.elem = ch.modified
+
+        switch = {
+            model.Insert: insert,
+            model.Remove: remove,
+            model.Modify: modify,
+        }
+
+        for ch in evt.data:
+            switch[ch.__class__](ch)
+
 
     def redraw_view(*_):
         view.repaint()
@@ -150,7 +183,7 @@ def make(eventbus, canvas_model):
             'top': {
                 Initial: T('idle'),
                 Model_Changed: Internal(fseq(
-                    update_view_with_changes,
+                    apply_changes,
                     redraw_view)),
                 Canvas_Wheel: Internal(fseq(
                     zoom_view,
