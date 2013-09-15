@@ -52,15 +52,15 @@ class CanvasModelElement(CanvasElement):
         else:
             return super(CanvasModelElement, self).stroke_color
 
-    @staticmethod
-    def make(elem, canvas):
-        elem_map = {
-            model.Rectangle: RectangleCE,
-            model.Ellipse: EllipseCE,
-            model.Path: PathCE,
-            model.Link: LinkCE,
-        }
-        return elem_map[elem.__class__](elem, canvas)
+    #@staticmethod
+    #def make(elem, canvas):
+    #    elem_map = {
+    #        model.Rectangle: RectangleCE,
+    #        model.Ellipse: EllipseCE,
+    #        model.Path: PathCE,
+    #        model.Link: LinkCE,
+    #    }
+    #    return elem_map[elem.__class__](elem, canvas)
 
 
 

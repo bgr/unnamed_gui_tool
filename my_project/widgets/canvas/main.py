@@ -1,15 +1,16 @@
 import logging
 _log = logging.getLogger(__name__)
 
+from collections import defaultdict
 from hsmpy import Event, Initial, T, Internal, Choice
 
 from ...app import S
-from ...util import join_dicts, fseq
+from ...util import join_dicts, fseq, Dummy
 from ...events import (WrappedEvent, Tool_Changed, Model_Changed,
                        PATH_TOOL, COMBO_TOOL, ELLIPSE_TOOL, LINK_TOOL)
 from ... import model
 from view import CanvasView
-from elements import CanvasModelElement
+from elements import PathCE, LinkCE, RectangleCE, EllipseCE
 # tool behaviors are defined using sub-HSMs in separate modules:
 from . import path_tool, combo_tool, ellipse_tool, link_tool
 
@@ -63,15 +64,62 @@ def make(eventbus, canvas_model):
     view.mouseDragged = view.mouseMoved
     view.mouseWheelMoved = lambda evt: eventbus.dispatch(Canvas_Wheel(evt))
 
+    def get_cel(el):
+        """Returns CanvasElement instance for given model element."""
+        factory = {
+            model.Rectangle: lambda: RectangleCE(el, view),
+            model.Ellipse: lambda: EllipseCE(el, view),
+            model.Path: lambda: PathCE(el, view),
+            model.Link: lambda: LinkCE(el, get_cel(el.a), get_cel(el.b), view),
+        }
+        return factory[el.__class__]()
+
     # this dict will be used by HSMs to get CanvasElement instance for any
     # model element
-    elem_map = dict((el, CanvasModelElement.make(el, view))
-                    for el in canvas_model.elems)
+    elem_map = defaultdict(get_cel)
+
+
+    def apply_changes(changes):
+        def insert(ch):
+            new_cel = get_cel(ch.elem)
+            elem_map[ch.elem] = new_cel
+            view.add(new_cel)
+
+        def remove(ch):
+            cel = elem_map[ch.elem]
+            view.remove(cel)
+            del elem_map[ch.elem]
+            assert False, "must remove from selected list, with modify also!"
+
+        def modify(ch):
+            cel = elem_map[ch.elem]
+            del elem_map[ch.elem]
+            elem_map[ch.modified] = cel
+            cel.elem = ch.modified
+            # line above will make CanvasElement return new Shape to be
+            # rendered once its shape property gets accessed next time
+
+        switch = {
+            model.Insert: insert,
+            model.Remove: remove,
+            model.Modify: modify,
+        }
+
+        # sort changes so that links are at the end, to ensure that
+        # CanvasModelElements they are linked to are already instantiated
+        # before instantiating new LinkCE
+        is_link = lambda chg: isinstance(chg.elem, model.Link)
+        changes = sorted(changes, key=lambda chg: 0 if not is_link(chg) else 1)
+        for ch in changes:
+            switch[ch.__class__](ch)
+
 
     # draw elements that are already in the model
-    for el in elem_map.values():
-        view.add(el)
+    apply_changes(model.Insert(el) for el in canvas_model.elems)
     view.repaint()
+
+
+    data = Dummy(prev_cursor_pos=None)
 
 
     def set_up(hsm):
@@ -81,6 +129,31 @@ def make(eventbus, canvas_model):
     def remember_selected_tool(evt, hsm):
         hsm.data.canvas_tool = evt.data
         _log.info('remembered selected tool {0}'.format(hsm.data.canvas_tool))
+
+
+    def redraw_view(*_):
+        view.repaint()
+
+    def get_tool(_, hsm):
+        return hsm.data.canvas_tool or DEFAULT_TOOL
+
+    def zoom_view(evt, _):
+        vx1, vy1 = view.transformed(evt.x, evt.y)
+        if evt.wheelRotation > 0:
+            view.zoom_by(1.0 / ZOOM_IN_FACTOR)
+        else:
+            view.zoom_by(ZOOM_IN_FACTOR)
+        vx2, vy2 = view.transformed(evt.x, evt.y)
+        # pan the view so that mouse cursor position is the zoom center point
+        view.pan_by(vx2 - vx1, vy2 - vy1, zoom=False)
+
+    def remember_cursor_pos(evt, _):
+        data.prev_cursor_pos = (evt.x, evt.y)
+
+    def pan_view(evt, _):
+        x, y = data.prev_cursor_pos
+        view.pan_by(evt.x - x, evt.y - y)
+
 
     event_pack = [Canvas_Down, Canvas_Up, Canvas_Right_Down, Canvas_Right_Up,
                   Canvas_Middle_Down, Canvas_Middle_Up, Canvas_Move,
@@ -117,62 +190,6 @@ def make(eventbus, canvas_model):
         })
     }
 
-    def apply_changes(evt, _):
-        def insert(ch):
-            new_cel = CanvasModelElement.make(ch.elem, view)
-            elem_map[ch.elem] = new_cel
-            view.add(new_cel)
-
-        def remove(ch):
-            cel = elem_map[ch.elem]
-            view.remove(cel)
-            del elem_map[ch.elem]
-            assert False, "must remove from selected list, with modify also!"
-
-        def modify(ch):
-            cel = elem_map[ch.elem]
-            del elem_map[ch.elem]
-            elem_map[ch.modified] = cel
-            # line below will make CanvasElement update its shape property
-            # once it gets accessed next time
-            cel.elem = ch.modified
-
-        switch = {
-            model.Insert: insert,
-            model.Remove: remove,
-            model.Modify: modify,
-        }
-
-        for ch in evt.data:
-            switch[ch.__class__](ch)
-
-
-    def redraw_view(*_):
-        view.repaint()
-
-    def get_tool(_, hsm):
-        return hsm.data.canvas_tool or DEFAULT_TOOL
-
-    def zoom_view(evt, _):
-        vx1, vy1 = view.transformed(evt.x, evt.y)
-        if evt.wheelRotation > 0:
-            view.zoom_by(1.0 / ZOOM_IN_FACTOR)
-        else:
-            view.zoom_by(ZOOM_IN_FACTOR)
-        vx2, vy2 = view.transformed(evt.x, evt.y)
-        # pan the view so that mouse cursor position is the zoom center point
-        view.pan_by(vx2 - vx1, vy2 - vy1, zoom=False)
-
-    prev_cursor_pos = []
-
-    def remember_cursor_pos(evt, _):
-        prev_cursor_pos[:] = [evt.x, evt.y]
-
-    def pan_view(evt, _):
-        x, y = prev_cursor_pos
-        view.pan_by(evt.x - x, evt.y - y)
-        prev_cursor_pos[:] = [evt.x, evt.y]
-
 
     trans = join_dicts(
         combo_trans,
@@ -183,7 +200,7 @@ def make(eventbus, canvas_model):
             'top': {
                 Initial: T('idle'),
                 Model_Changed: Internal(fseq(
-                    apply_changes,
+                    lambda evt, _: apply_changes(evt.data),
                     redraw_view)),
                 Canvas_Wheel: Internal(fseq(
                     zoom_view,
@@ -216,6 +233,7 @@ def make(eventbus, canvas_model):
             'panning': {
                 Canvas_Move: Internal(fseq(
                     pan_view,
+                    remember_cursor_pos,
                     redraw_view)),
                 Canvas_Middle_Up: T('idle'),
             },

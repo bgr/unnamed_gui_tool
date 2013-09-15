@@ -59,12 +59,12 @@ def make(eb, view, event_pack, elem_map, canvas_model):
         data.start_x, data.start_y = evt.x, evt.y
 
     def elem_at(x, y):
-        celems = view.elements_at(x, y)
+        cels = view.elements_at(x, y)
         # sort so that already selected elements are at the beginning of list
         # that's useful when trying to click already selected element which
         # happens to be under unselected elem
-        celems = sorted(celems, key=lambda cel: 0 if cel.is_selected else 1)
-        return next(iter(celems), None)
+        cels = sorted(cels, key=lambda cel: 0 if cel.is_selected else 1)
+        return next(iter(cels), None)
 
     def whats_at_start_coords(*_):
         cel = elem_at(data.start_x, data.start_y)
