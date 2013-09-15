@@ -66,15 +66,20 @@ def make(eb, view, event_pack, elem_map, canvas_model):
             data.preview = LinkCE(elem, start_cel, end_cel, view)
         # otherwise it's a straight line
         else:
-            verts = ((data.start_x, data.start_y), (data.end_x, data.end_y))
+            verts = (view.transformed(data.start_x, data.start_y),
+                     view.transformed(data.end_x, data.end_y))
             elem = model.Path(verts)
             data.preview = PathCE(elem, view)
         view.add(data.preview)
 
+    def remove_preview(*_):
+        view.remove(data.preview) if data.preview else ''
+        data.preview = None
+
     def redraw_view(*_):
         view.repaint()
 
-    def commit_link_to_model(*_):
+    def commit_to_model(*_):
         link = model.Link(data.start_elem, data.end_elem)
         _log.info('about to commit link {0}'.format(link))
         canvas_model.commit([model.Insert(link)])
@@ -83,7 +88,7 @@ def make(eb, view, event_pack, elem_map, canvas_model):
         eb.dispatch(Tool_Done())
 
     def clean_up(*_):
-        view.remove(data.preview) if data.preview else ''
+        remove_preview()
         data.reset()
 
 
@@ -145,8 +150,9 @@ def make(eb, view, event_pack, elem_map, canvas_model):
         },
         'link_drawing_over_element': {
             Canvas_Up: Internal(fseq(
-                commit_link_to_model,
-                signalize_finished,))
+                remove_preview,
+                commit_to_model,
+                signalize_finished))
         },
     }
 

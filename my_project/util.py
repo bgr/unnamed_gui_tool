@@ -84,6 +84,34 @@ class Dummy(object):
         self._original_kwargs = tmp
 
 
+# doesn't work in Jython, __missing__ isn't used, using version below
+#class keydefaultdict(collections.defaultdict):
+    #"""Improved defaultdict to pass the requested key to factory function."""
+    #def __missing__(self, key):
+        #if self.default_factory is None:
+            #raise KeyError("Invalid key '{0}' and no default factory was "
+                           #"set".format(key))
+        #else:
+            #val = self.default_factory(key)
+            #self[key] = val
+            #return val
+
+class keydefaultdict(dict):
+    """Improved defaultdict to pass the requested key to factory function."""
+    def __init__(self, default_factory=None, *args, **kwargs):
+        super(keydefaultdict, self).__init__(*args, **kwargs)
+        self.default_factory = default_factory
+
+    def __getitem__(self, key):
+        if not key in self and self.default_factory is None:
+            raise KeyError("Invalid key '{0}' and no default factory was "
+                           "set".format(key))
+        elif key in self:
+            return super(keydefaultdict, self).__getitem__(key)
+        val = self.default_factory(key)
+        self[key] = val
+        return val
+
 #def is_valid_identifier(str_val):
 #    return (not keyword.iskeyword(str_val) and
 #            re.match("[_A-Za-z][_a-zA-Z0-9]*$", str_val) is not None)

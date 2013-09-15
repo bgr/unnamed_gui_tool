@@ -46,6 +46,10 @@ def make(eb, view, event_pack, elem_map, canvas_model):
             data.preview = PathCE(path, view)
             view.add(data.preview)
 
+    def remove_preview(*_):
+        view.remove(data.preview) if data.preview else ''
+        data.preview = None
+
     def redraw_view(*_):
         view.repaint()
 
@@ -58,7 +62,7 @@ def make(eb, view, event_pack, elem_map, canvas_model):
         eb.dispatch(Tool_Done())
 
     def clean_up(*_):
-        view.remove(data.preview) if data.preview else ''
+        remove_preview()
         data.reset()
 
 
@@ -83,6 +87,7 @@ def make(eb, view, event_pack, elem_map, canvas_model):
             Canvas_Down: Internal(add_vertex),
             Canvas_Right_Down: Internal(fseq(
                 add_vertex,
+                remove_preview,
                 commit_to_model,
                 signalize_finished))
         },

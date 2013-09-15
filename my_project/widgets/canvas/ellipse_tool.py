@@ -22,7 +22,7 @@ def make(eb, view, event_pack, elem_map, canvas_model):
     def remember_start_coords(evt, _):
         data.start_x, data.start_y = evt.x, evt.y
 
-    def update_dimensions(evt, _):
+    def update_preview(evt, _):
         x, y = view.transformed(data.start_x, data.start_y)
         x2, y2 = view.transformed(evt.x, evt.y)
         ellipse = model.Ellipse(x, y, x2 - x, y2 - y)
@@ -31,6 +31,10 @@ def make(eb, view, event_pack, elem_map, canvas_model):
         else:
             data.preview = EllipseCE(ellipse, view)
             view.add(data.preview)
+
+    def remove_preview(*_):
+        view.remove(data.preview) if data.preview else ''
+        data.preview = None
 
     def redraw_view(*_):
         view.repaint()
@@ -50,7 +54,7 @@ def make(eb, view, event_pack, elem_map, canvas_model):
         eb.dispatch(Tool_Done())
 
     def clean_up(*_):
-        view.remove(data.preview) if data.preview else ''
+        remove_preview()
         data.reset()
 
 
@@ -79,9 +83,10 @@ def make(eb, view, event_pack, elem_map, canvas_model):
         },
         'ellipse_dragging': {
             Canvas_Move: Internal(fseq(
-                update_dimensions,
+                update_preview,
                 redraw_view)),
             Canvas_Up: Internal(fseq(
+                remove_preview,
                 commit_to_model,
                 signalize_finished)),
         }

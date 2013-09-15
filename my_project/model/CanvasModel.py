@@ -42,6 +42,9 @@ class CanvasModel(object):
         _log.info('Model got changelist {0}'.format(
             ''.join(['\n * ' + str(ch) for ch in changes])))
 
+        if not changes:  # skip empty changelist
+            return
+
         _commit(changes, self._changelog, self._eb, self._elems)
 
 
@@ -130,6 +133,7 @@ def _move(what, dx, dy, existing):
     """
     if isinstance(what, _BaseElement):
         what = [what]
+    what = [el for el in what if not isinstance(el, Link)]  # exclude links
 
     is_elem = lambda e: isinstance(e, _BaseElement) and not isinstance(e, Link)
     assert all(is_elem(el) for el in what), "elements only (but not links)"

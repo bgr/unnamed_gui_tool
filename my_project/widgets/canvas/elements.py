@@ -114,17 +114,14 @@ class PathCE(CanvasModelElement):
 
 
 
-class LinkCE(CanvasModelElement):
+class LinkCE(PathCE):
     def __init__(self, elem, a, b, canvas):
-        super(LinkCE, self).__init__(elem, canvas)
+        assert isinstance(elem, model.Link)
         assert isinstance(a, CanvasModelElement)
         assert isinstance(b, CanvasModelElement)
+        super(PathCE, self).__init__(elem, canvas)
         self.a = a
         self.b = b
-
-    @property
-    def fill_color(self):
-        return None
 
     def _make_shape(self):
         shape = awt.geom.Path2D.Float()

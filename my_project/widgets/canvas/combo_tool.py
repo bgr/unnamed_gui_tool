@@ -104,10 +104,15 @@ def make(eb, view, event_pack, elem_map, canvas_model):
     def simulate_move(evt, hsm):
         x, y = data.start_x, data.start_y
         dx, dy = evt.x - x, evt.y - y
+        changes = canvas_model.move([cel.elem for cel in selection],
+                                    dx / view.zoom, dy / view.zoom)
         if not data.moved:
-            data.moved = tuple((cel.elem, cel) for cel in selection)
-        for orig_el, cel in data.moved:
-            cel.elem = orig_el.move(dx / view.zoom, dy / view.zoom)
+            # remember original model elements and corresponding canvas elems
+            # to be able to undo this fake move later
+            data.moved = [(chg.elem, elem_map[chg.elem]) for chg in changes]
+        for (_, cel), chg in zip(data.moved, changes):
+            # TODO: will these two lists always be in same order?
+            cel.elem = chg.modified
 
     def undo_simulated_move(*_):
         for orig_el, cel in data.moved:
@@ -207,6 +212,7 @@ def make(eb, view, event_pack, elem_map, canvas_model):
         },
         'combo_dragging_selection': {
             Canvas_Move: Internal(fseq(
+                undo_simulated_move,
                 simulate_move,
                 redraw_view)),
             Canvas_Up: Internal(fseq(

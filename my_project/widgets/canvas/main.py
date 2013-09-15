@@ -1,11 +1,10 @@
 import logging
 _log = logging.getLogger(__name__)
 
-from collections import defaultdict
 from hsmpy import Event, Initial, T, Internal, Choice
 
 from ...app import S
-from ...util import join_dicts, fseq, Dummy
+from ...util import join_dicts, fseq, Dummy, keydefaultdict
 from ...events import (WrappedEvent, Tool_Changed, Model_Changed,
                        PATH_TOOL, COMBO_TOOL, ELLIPSE_TOOL, LINK_TOOL)
 from ... import model
@@ -64,32 +63,37 @@ def make(eventbus, canvas_model):
     view.mouseDragged = view.mouseMoved
     view.mouseWheelMoved = lambda evt: eventbus.dispatch(Canvas_Wheel(evt))
 
+    # this dict will be used by HSMs to get CanvasElement instance for any
+    # model element
+    elem_map = keydefaultdict()
+
     def get_cel(el):
         """Returns CanvasElement instance for given model element."""
         factory = {
             model.Rectangle: lambda: RectangleCE(el, view),
             model.Ellipse: lambda: EllipseCE(el, view),
             model.Path: lambda: PathCE(el, view),
-            model.Link: lambda: LinkCE(el, get_cel(el.a), get_cel(el.b), view),
+            model.Link: lambda: LinkCE(el, elem_map[el.a],
+                                       elem_map[el.b], view),
         }
-        return factory[el.__class__]()
+        cel = factory[el.__class__]()
+        return cel
 
-    # this dict will be used by HSMs to get CanvasElement instance for any
-    # model element
-    elem_map = defaultdict(get_cel)
+    elem_map.default_factory = get_cel
+    # had to assign default_factory here since get_cel needs reference to
+    # existing elem_map instance in order to be able to get link targets
 
 
     def apply_changes(changes):
         def insert(ch):
-            new_cel = get_cel(ch.elem)
-            elem_map[ch.elem] = new_cel
+            new_cel = elem_map[ch.elem]  # will instantiate
             view.add(new_cel)
 
         def remove(ch):
             cel = elem_map[ch.elem]
             view.remove(cel)
             del elem_map[ch.elem]
-            assert False, "must remove from selected list, with modify also!"
+            assert False, "TODO remove from selected list in combo_tool.py"
 
         def modify(ch):
             cel = elem_map[ch.elem]
@@ -106,16 +110,18 @@ def make(eventbus, canvas_model):
         }
 
         # sort changes so that links are at the end, to ensure that
-        # CanvasModelElements they are linked to are already instantiated
-        # before instantiating new LinkCE
+        # CanvasModelElements they are linked to are already
+        # instantiated/updated before instantiating/updating LinkCE
         is_link = lambda chg: isinstance(chg.elem, model.Link)
         changes = sorted(changes, key=lambda chg: 0 if not is_link(chg) else 1)
         for ch in changes:
             switch[ch.__class__](ch)
+        assert len(elem_map) == len(canvas_model._elems), "elem_map not synced"
+        assert len(view._elems) == len(canvas_model._elems), "view not synced"
 
 
     # draw elements that are already in the model
-    apply_changes(model.Insert(el) for el in canvas_model.elems)
+    apply_changes(model.Insert(el) for el in canvas_model._elems)
     view.repaint()
 
 

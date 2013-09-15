@@ -18,10 +18,10 @@ logging.basicConfig(level=logging.INFO)
 
 class LoggingState(State):
     def enter(self, hsm):
-        logging.getLogger('HSM.{0}'.format(self.name)).info('entering')
+        logging.getLogger('HSM.{0}'.format(self.name)).debug('entering')
 
     def exit(self, hsm):
-        logging.getLogger('HSM.{0}'.format(self.name)).info('exiting')
+        logging.getLogger('HSM.{0}'.format(self.name)).debug('exiting')
 
 # alias class so that it can easily be switched
 S = LoggingState
