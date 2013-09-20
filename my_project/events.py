@@ -16,4 +16,7 @@ class WrappedEvent(Event):
 
 class Tool_Changed(Event): pass
 
+class Undo_Requested(Event): pass
+class Redo_Requested(Event): pass
+
 class Model_Changed(Event): pass

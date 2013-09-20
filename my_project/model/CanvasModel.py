@@ -11,6 +11,7 @@ class CanvasModel(object):
     def __init__(self, eventbus):
         self._elems = []
         self._changelog = []
+        self._redolog = []
         self._eb = eventbus
 
     @property
@@ -38,7 +39,9 @@ class CanvasModel(object):
         self.commit(old_changes + new_changes)
 
     def commit(self, changes):
-        """Updates elems, appends changes to changelog, notifies listeners."""
+        """ Updates elems, appends changes to changelog, clears redo log
+            and notifies listeners.
+        """
         _log.info('Model got changelist {0}'.format(
             ''.join(['\n * ' + str(ch) for ch in changes])))
 
@@ -46,6 +49,7 @@ class CanvasModel(object):
             return
 
         _commit(changes, self._changelog, self._eb, self._elems)
+        self._redolog = []
 
 
     def move(self, what, dx, dy):
@@ -54,10 +58,29 @@ class CanvasModel(object):
         """
         return _move(what, dx, dy, self._elems)
 
+    def undo(self):
+        _undo(self._changelog, self._redolog, self._eb, self._elems)
+
+    def redo(self):
+        _redo(self._changelog, self._redolog, self._eb, self._elems)
 
 
 
-def _commit(changes, changelog, eb, elems):
+def _update_model_elements(changes, model_elements):
+    """Modifies model elements list according to given changes."""
+    # TODO: maybe move to each element
+    for ch in changes:
+        if isinstance(ch, Remove):
+            model_elements.remove(ch.elem)
+        elif isinstance(ch, Insert):
+            model_elements += [ch.elem]
+        elif isinstance(ch, Modify):
+            model_elements[model_elements.index(ch.elem)] = ch.modified
+        else:
+            assert False, "this cannot happen"
+
+
+def _commit(changes, changelog, eb, existing):
     """ Validates the changes and commits them to model, changing model elems.
 
         Commit performs following actions:
@@ -74,7 +97,7 @@ def _commit(changes, changelog, eb, elems):
             list to append changes to
         eb : EventBus
             event bus on which to dispatch Model_Changed event
-        elems : list
+        existing : list
             elements currently in the model, used for validating
 
         Returns
@@ -85,21 +108,45 @@ def _commit(changes, changelog, eb, elems):
         ------
         ValueError if validation fails
     """
-    _validate(changes, elems)
+    _validate(changes, existing)
 
-    for ch in changes:
-        if isinstance(ch, Remove):
-            elems.remove(ch.elem)
-        elif isinstance(ch, Insert):
-            elems += [ch.elem]
-        elif isinstance(ch, Modify):
-            elems[elems.index(ch.elem)] = ch.modified
-        else:
-            assert False, "this cannot happen"
+    _update_model_elements(changes, existing)
 
     # changelog items are lists of changes, wrap in additional list
     changelog += [changes[:]]
     eb.dispatch(Model_Changed(changes[:]))
+
+
+def _invert(changelist):
+    """Returns new list with inverted changes from given changelist."""
+    return [ch.inverse for ch in changelist]
+
+
+def _undo(change_log, redo_log, eb, existing):
+    """ Undoes last changelist in change_log, removes it from change_log and
+        prepends it to redo_log, and notifies the listeners.
+    """
+    if not change_log:
+        return  # nothing to do
+
+    cl = change_log.pop()
+    redo_log.insert(0, cl)
+    undo_cl = _invert(cl)
+    _update_model_elements(undo_cl, existing)
+    eb.dispatch(Model_Changed(undo_cl))
+
+
+def _redo(change_log, redo_log, eb, existing):
+    """ Redoes first changelist in redo_log, pops it from redo_log and appends
+        it to change_log, and notifies the listeners.
+    """
+    if not redo_log:
+        return  # nothing to do
+
+    cl = redo_log.pop(0)
+    change_log.append(cl)
+    _update_model_elements(cl, existing)
+    eb.dispatch(Model_Changed(cl[:]))
 
 
 def _move(what, dx, dy, existing):

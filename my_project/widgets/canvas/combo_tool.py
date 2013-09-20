@@ -10,7 +10,6 @@ from ...util import fseq, Dummy
 from elements import RectangleCE
 
 
-#MARQUEE_STROKE_COLOR = awt.Color.BLUE
 MARQUEE_FILL_COLOR = awt.Color(100, 100, 255, 40)
 
 
@@ -45,6 +44,8 @@ def make(eb, view, event_pack, elem_map, canvas_model):
                  moved=())
 
     selection = []  # this one keeps elements after tool has finished
+    # TODO: don't store cel instances in selection or at least make sure that
+    # selected cels are removed from the list when they're removed from model
 
     def set_selection(canvas_elems):
         assert isinstance(canvas_elems, (list, tuple))

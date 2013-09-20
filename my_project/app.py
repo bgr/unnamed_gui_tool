@@ -4,6 +4,7 @@ from javautils import invokeLater
 import widgets
 from model import CanvasModel, Rectangle, Ellipse
 from hsmpy import HSM, EventBus, State, Initial, T
+from events import Undo_Requested, Redo_Requested
 import logging
 
 
@@ -46,6 +47,9 @@ def run():
     eventbus = EventBus()
     canvas_model = CanvasModel(eventbus)
     canvas_model.elems = [Ellipse(20, 30, 40, 50), Rectangle(30, 40, 10, 20)]
+
+    eventbus.register(Undo_Requested, lambda _: canvas_model.undo())
+    eventbus.register(Redo_Requested, lambda _: canvas_model.redo())
 
     cvs_view_1, cvs_states_1, cvs_trans_1 = widgets.canvas.make(eventbus,
                                                                 canvas_model)

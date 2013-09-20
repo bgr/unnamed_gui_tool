@@ -93,7 +93,7 @@ def make(eventbus, canvas_model):
             cel = elem_map[ch.elem]
             view.remove(cel)
             del elem_map[ch.elem]
-            assert False, "TODO remove from selected list in combo_tool.py"
+            # TODO: remove from selected list in combo_tool.py
 
         def modify(ch):
             cel = elem_map[ch.elem]

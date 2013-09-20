@@ -130,7 +130,9 @@ def make(eb, view, event_pack, elem_map, canvas_model):
         'link_engaged': {
             # never called, should always transition directly to substates
             Initial: T('link_wait_for_move', action=lambda _, __: 1 / 0),
-            Canvas_Right_Down: Internal(signalize_finished),
+            Canvas_Right_Down: Internal(fseq(
+                signalize_finished,
+                redraw_view)),
         },
         'link_wait_for_move': {
             Canvas_Move: T('link_drawing', remember_end_coords_and_elem),

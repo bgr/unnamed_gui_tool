@@ -9,13 +9,21 @@ class _BaseChange(Record):
         assert isinstance(elem, _BaseElement), "must be valid element"
         self.elem = elem
 
+    @property
+    def inverse(self):
+        raise NotImplementedError("implement in subclass")
+
 
 class Remove(_BaseChange):
-    pass
+    @property
+    def inverse(self):
+        return Insert(self.elem)
 
 
 class Insert(_BaseChange):
-    pass
+    @property
+    def inverse(self):
+        return Remove(self.elem)
 
 
 class Modify(_BaseChange):
@@ -23,6 +31,10 @@ class Modify(_BaseChange):
         super(Modify, self).__init__(elem)
         assert isinstance(modified, _BaseElement), "must be valid element"
         self.modified = modified
+
+    @property
+    def inverse(self):
+        return Modify(self.modified, self.elem)
 
 
 
