@@ -11,3 +11,9 @@ submodule_dirs = ['hsmpy', 'quadpy']
 for dirname in submodule_dirs:
     path = os.path.join(project_root, 'submodules', dirname)
     sys.path.insert(0, path)
+
+# add jars to classpath
+jars = ['six11utils.jar']
+for jarfile in jars:
+    path = os.path.join(project_root, 'jars', jarfile)
+    sys.path.append(path)

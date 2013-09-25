@@ -1,6 +1,8 @@
 import java.awt as awt
 from view import CanvasElement
 from ... import model
+from org.six11.util.gui.shape import ShapeFactory
+from org.six11.util.pen import Pt
 
 
 ELEMENT_STROKE_COLOR = awt.Color.BLACK
@@ -115,24 +117,26 @@ class LinkCE(PathCE):
         self.b = b
 
     def _make_shape(self):
-        shape = awt.geom.Path2D.Float()
         if self.a == self.b:  # draw self-loop
             x1, y1, x2, y2 = self.a.bounds
-            center_x, center_y = (x1 + x2) / 2.0, (y1 + y2) / 2.0
-            y_top = max(y1 + 2, center_y - 10)
-            y_bot = min(y2 - 2, center_y + 10)
-            l1 = (center_x, y_top, x2 + 10, y_top)
-            l2 = (center_x, y_bot, x2 + 10, y_bot)
+            mid_x, mid_y = (x1 + x2) / 2.0, (y1 + y2) / 2.0
+            top_y = max(y1 + 2, mid_y - 10)
+            bot_y = min(y2 - 2, mid_y + 10)
+            l_top = (mid_x, top_y, x2 + 10, top_y)
+            l_mid = (mid_x, mid_y, x2 + 10, mid_y)
+            l_bot = (mid_x, bot_y, x2 + 10, bot_y)
             # make sure the points are on the right side
             start_x, start_y = nearest(
-                points_on_outline(self.a.shape, l1), (x2, y_top))
+                points_on_outline(self.a.shape, l_top), (x2, top_y))
+            mid_x, mid_y = nearest(
+                points_on_outline(self.a.shape, l_mid), (x2, mid_y))
             end_x, end_y = nearest(
-                points_on_outline(self.a.shape, l2), (x2, y_bot))
-            mid_x, mid_y = start_x + 10, (start_y + end_y) / 2.0
-            shape.moveTo(start_x, start_y)
-            shape.lineTo(mid_x, mid_y)
-            shape.lineTo(end_x, end_y)
+                points_on_outline(self.a.shape, l_bot), (x2, bot_y))
+            shape = ShapeFactory.makeArc(Pt(start_x, start_y),
+                                         Pt(mid_x + 10, mid_y),
+                                         Pt(end_x, end_y))
         else:  # connect 'a' and 'b'
+            shape = awt.geom.Path2D.Float()
             ax1, ay1, ax2, ay2 = self.a.bounds
             bx1, by1, bx2, by2 = self.b.bounds
             ca_x, ca_y = (ax1 + ax2) / 2.0, (ay1 + ay2) / 2.0
@@ -180,6 +184,10 @@ def outline(shape):
     return segs
 
 
+
+# TODO: move these functions to util
+
+
 def points_on_outline(shape, line):
     """Returns intersection points of line and shape's outline."""
     return filter(None, [line_segment_intersection(line, seg)
@@ -199,15 +207,15 @@ def nearest(points, target_point):
 
 
 def line_intersection(line_a, line_b):
-    """ Returns point of intersection of two lines as a tuple (int_x, int_y),
+    """ Returns point of intersection of two lines as a tuple (x, y),
         or None if parallel or coincident.
 
         Parameters
         ----------
         line_a : tuple
-            4-tuple representing first line's x1, y1, x2 and y2
+            first line defined by 4-tuple (x1, y1, x2, y2)
         line_b : tuple
-            4-tuple representing second line's x1, y1, x2 and y2
+            second line defined by 4-tuple (x1, y1, x2, y2)
 
         Returns
         -------
@@ -225,15 +233,15 @@ def line_intersection(line_a, line_b):
 
 
 def segment_intersection(seg_a, seg_b):
-    """ Returns point of intersection of two line segments as a tuple
-        (int_x, int_y), or None if parallel, coincident or don't intersect.
+    """ Returns point of intersection of two line segments as a tuple (x, y),
+        or None if parallel, coincident or don't intersect.
 
         Parameters
         ----------
         seg_a : tuple
-            4-tuple representing first seg's x1, y1, x2 and y2
+            first segment defined by 4-tuple (x1, y1, x2, y2)
         seg_b : tuple
-            4-tuple representing second seg's x1, y1, x2 and y2
+            second segment defined by 4-tuple (x1, y1, x2, y2)
 
         Returns
         -------
@@ -253,6 +261,24 @@ def segment_intersection(seg_a, seg_b):
 
 
 def line_segment_intersection(line, seg):
+    """ Returns point of intersection of line and segment as a tuple (x, y),
+        or None if parallel, coincident or don't intersect.
+
+        Parameters
+        ----------
+        line : tuple
+            line defined by 4-tuple (x1, y1, x2, y2)
+        seg : tuple
+            segment defined by 4-tuple (x1, y1, x2, y2)
+
+        Returns
+        -------
+        intersection : tuple or None
+            2-tuple (intersection_x, intersection_y) if segs intersect, or
+            None if segs are parallel, coincident or don't intersect.
+    """
+    # WARNING: untested, I just extrapolated this method from
+    # segment_intersection by modifying condition below, might not be correct
     x1, y1, x2, y2 = line
     x3, y3, x4, y4 = seg
     denom = float((y4 - y3) * (x2 - x1) - (x4 - x3) * (y2 - y1))
